@@ -6,6 +6,9 @@ using System;
 using System.IO;
 using System.Reflection;
 
+/// <summary>
+/// 생성된 튜토리얼 안내문 에셋을 전용 스타일로 보여주는 커스텀 인스펙터입니다.
+/// </summary>
 [CustomEditor(typeof(Readme))]
 [InitializeOnLoad]
 public class ReadmeEditor : Editor
@@ -21,6 +24,9 @@ public class ReadmeEditor : Editor
         EditorApplication.delayCall += SelectReadmeAutomatically;
     }
 
+    /// <summary>
+    /// 확인 대화상자를 거친 뒤 프로젝트에서 튜토리얼 안내문 관련 에셋을 제거합니다.
+    /// </summary>
     static void RemoveTutorial()
     {
         if (EditorUtility.DisplayDialog("Remove Readme Assets",
@@ -51,6 +57,9 @@ public class ReadmeEditor : Editor
         }
     }
 
+    /// <summary>
+    /// 에디터 세션당 한 번 안내문 에셋을 선택하고, 처음 열릴 때 샘플 레이아웃을 복원합니다.
+    /// </summary>
     static void SelectReadmeAutomatically()
     {
         if (!SessionState.GetBool(s_ShowedReadmeSessionStateName, false))
@@ -66,6 +75,9 @@ public class ReadmeEditor : Editor
         }
     }
 
+    /// <summary>
+    /// 프로젝트에 포함된 튜토리얼 전용 창 레이아웃을 불러옵니다.
+    /// </summary>
     static void LoadLayout()
     {
         var assembly = typeof(EditorApplication).Assembly;
@@ -74,6 +86,9 @@ public class ReadmeEditor : Editor
         method.Invoke(null, new object[] { Path.Combine(Application.dataPath, "TutorialInfo/Layout.wlt"), false });
     }
 
+    /// <summary>
+    /// 튜토리얼 안내문 에셋을 찾아 프로젝트 창에서 선택합니다.
+    /// </summary>
     static Readme SelectReadme()
     {
         var ids = AssetDatabase.FindAssets("Readme t:Readme");
@@ -92,6 +107,9 @@ public class ReadmeEditor : Editor
         }
     }
 
+    /// <summary>
+    /// 커스텀 인스펙터 상단의 큰 제목 영역을 그립니다.
+    /// </summary>
     protected override void OnHeaderGUI()
     {
         var readme = (Readme)target;
@@ -120,6 +138,9 @@ public class ReadmeEditor : Editor
         GUILayout.EndHorizontal();
     }
 
+    /// <summary>
+    /// 안내문 본문 섹션과 튜토리얼 제거 버튼을 그립니다.
+    /// </summary>
     public override void OnInspectorGUI()
     {
         var readme = (Readme)target;
@@ -154,6 +175,7 @@ public class ReadmeEditor : Editor
         }
     }
 
+    // 현재 인스펙터 인스턴스에서 지연 생성 스타일이 모두 준비되면 참입니다.
     bool m_Initialized;
 
     GUIStyle LinkStyle
@@ -196,6 +218,9 @@ public class ReadmeEditor : Editor
     [SerializeField]
     GUIStyle m_ButtonStyle;
 
+    /// <summary>
+    /// 안내문 인스펙터에서 쓰는 커스텀 GUI 스타일을 지연 생성합니다.
+    /// </summary>
     void Init()
     {
         if (m_Initialized)
@@ -215,16 +240,20 @@ public class ReadmeEditor : Editor
         m_LinkStyle = new GUIStyle(m_BodyStyle);
         m_LinkStyle.wordWrap = false;
 
-        // Match selection color which works nicely for both light and dark skins
+        // 라이트/다크 스킨 모두에서 잘 보이도록 선택 색상 계열을 링크 색으로 사용합니다.
         m_LinkStyle.normal.textColor = new Color(0x00 / 255f, 0x78 / 255f, 0xDA / 255f, 1f);
         m_LinkStyle.stretchWidth = false;
 
         m_ButtonStyle = new GUIStyle(EditorStyles.miniButton);
         m_ButtonStyle.fontStyle = FontStyle.Bold;
 
+        // 다음 GUI 그리기부터 같은 스타일 인스턴스를 재사용할 수 있도록 준비 완료 상태로 표시합니다.
         m_Initialized = true;
     }
 
+    /// <summary>
+    /// 눌렀을 때 연결된 URL을 여는 클릭 가능한 하이퍼링크 라벨을 그립니다.
+    /// </summary>
     bool LinkLabel(GUIContent label, params GUILayoutOption[] options)
     {
         var position = GUILayoutUtility.GetRect(label, LinkStyle, options);

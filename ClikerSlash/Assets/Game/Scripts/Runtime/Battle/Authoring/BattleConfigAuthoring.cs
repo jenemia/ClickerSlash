@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace ClikerSlash.Battle
 {
+    /// <summary>
+    /// 씬에서 프로토타입 전투의 최상위 밸런스 값을 노출합니다.
+    /// </summary>
     public sealed class BattleConfigAuthoring : MonoBehaviour
     {
         [Min(1f)] public float BattleDurationSeconds = 60f;
@@ -14,8 +17,14 @@ namespace ClikerSlash.Battle
         public float DefenseLineZ = -3.5f;
     }
 
+    /// <summary>
+    /// 씬 설정 단계의 전투 설정값을 ECS 싱글턴 데이터로 변환합니다.
+    /// </summary>
     public sealed class BattleConfigAuthoringBaker : Baker<BattleConfigAuthoring>
     {
+        /// <summary>
+        /// 런타임 시스템이 하나의 기준 설정을 읽을 수 있도록 불변 전투 설정을 베이킹 엔티티에 기록합니다.
+        /// </summary>
         public override void Bake(BattleConfigAuthoring authoring)
         {
             var entity = GetEntity(TransformUsageFlags.None);

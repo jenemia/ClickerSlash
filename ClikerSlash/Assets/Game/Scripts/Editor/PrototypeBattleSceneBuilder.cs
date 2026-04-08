@@ -7,9 +7,13 @@ using UnityEngine.SceneManagement;
 
 namespace ClikerSlash.Editor
 {
+    /// <summary>
+    /// 한 번의 메뉴 실행으로 프로토타입 전투 씬과 허브 씬을 다시 생성하는 빌더입니다.
+    /// </summary>
     public static class PrototypeBattleSceneBuilder
     {
         private const string ScenePath = "Assets/Game/Scenes/PrototypeBattle.unity";
+        private const string HubScenePath = "Assets/Game/Scenes/PrototypeHub.unity";
         private const string PlayerPrefabPath = "Assets/Game/Prefabs/PlayerCube.prefab";
         private const string EnemyPrefabPath = "Assets/Game/Prefabs/EnemyCube.prefab";
         private const string PlayerMaterialPath = "Assets/Game/Materials/PlayerCube.mat";
@@ -20,6 +24,7 @@ namespace ClikerSlash.Editor
         [MenuItem("Tools/ClikerSlash/Build Prototype Battle Scene")]
         public static void BuildPrototypeBattleScene()
         {
+            // 생성 산출물이 항상 같은 프로젝트 구조에 배치되도록 필요한 폴더를 먼저 보장합니다.
             EnsureFolder("Assets/Game");
             EnsureFolder("Assets/Game/Scenes");
             EnsureFolder("Assets/Game/Prefabs");
@@ -37,6 +42,7 @@ namespace ClikerSlash.Editor
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             scene.name = "PrototypeBattle";
 
+            // 반복 실행 시에도 결과가 흔들리지 않도록 전투 씬 전체를 처음부터 다시 만듭니다.
             CreateCamera();
             CreateLight();
             var laneRoot = CreateLaneVisualRoot(laneMaterial, accentMaterial);
@@ -45,9 +51,11 @@ namespace ClikerSlash.Editor
             CreateHudRoot();
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
+            CreateHubScene();
             EditorBuildSettings.scenes = new[]
             {
-                new EditorBuildSettingsScene(ScenePath, true)
+                new EditorBuildSettingsScene(ScenePath, true),
+                new EditorBuildSettingsScene(HubScenePath, true)
             };
 
             AssetDatabase.SaveAssets();
@@ -55,6 +63,9 @@ namespace ClikerSlash.Editor
             Debug.Log($"Prototype battle scene generated at {ScenePath}");
         }
 
+        /// <summary>
+        /// 전투 씬과 경량 허브 씬에서 공통으로 사용하는 고정 카메라를 만듭니다.
+        /// </summary>
         private static void CreateCamera()
         {
             var cameraObject = new GameObject("Main Camera");
@@ -71,6 +82,9 @@ namespace ClikerSlash.Editor
             cameraObject.transform.rotation = Quaternion.Euler(48f, 0f, 0f);
         }
 
+        /// <summary>
+        /// 별도 라이팅 세팅 없이도 프로토타입이 읽히도록 단일 방향광을 추가합니다.
+        /// </summary>
         private static void CreateLight()
         {
             var lightObject = new GameObject("Directional Light");
@@ -81,6 +95,9 @@ namespace ClikerSlash.Editor
             lightObject.transform.rotation = Quaternion.Euler(45f, -30f, 0f);
         }
 
+        /// <summary>
+        /// 스폰 지점과 방어선 경계를 읽을 수 있도록 레인 바닥과 상하 라인을 생성합니다.
+        /// </summary>
         private static GameObject CreateLaneVisualRoot(Material laneMaterial, Material accentMaterial)
         {
             var root = new GameObject("LaneVisualRoot");
@@ -103,6 +120,9 @@ namespace ClikerSlash.Editor
             return root;
         }
 
+        /// <summary>
+        /// 스폰선이나 방어선처럼 직선 경계를 표현하는 단순 큐브 기반 마커를 만듭니다.
+        /// </summary>
         private static void CreateLineVisual(Transform parent, Material material, string name, Vector3 position, Vector3 scale)
         {
             var line = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -114,6 +134,9 @@ namespace ClikerSlash.Editor
             Object.DestroyImmediate(line.GetComponent<Collider>());
         }
 
+        /// <summary>
+        /// ECS 부트스트랩이 읽을 초기 전투 설정용 씬 구성 오브젝트를 생성합니다.
+        /// </summary>
         private static void CreateConfigRoots(GameObject laneRoot)
         {
             var battleConfigRoot = new GameObject("BattleConfig");
@@ -142,6 +165,9 @@ namespace ClikerSlash.Editor
             laneRoot.transform.position = Vector3.zero;
         }
 
+        /// <summary>
+        /// 생성한 플레이어/적 프리팹을 프레젠테이션 브리지에 연결합니다.
+        /// </summary>
         private static void CreatePresentationRoot(GameObject playerPrefab, GameObject enemyPrefab)
         {
             var presentationRoot = new GameObject("BattlePresentationRoot");
@@ -154,12 +180,35 @@ namespace ClikerSlash.Editor
             EditorUtility.SetDirty(bridge);
         }
 
+        /// <summary>
+        /// 프로토타입 전투 씬에서 사용하는 IMGUI HUD 프레젠터를 추가합니다.
+        /// </summary>
         private static void CreateHudRoot()
         {
             var hudRoot = new GameObject("HUDRoot");
             hudRoot.AddComponent<BattleHudPresenter>();
         }
 
+        /// <summary>
+        /// 마지막 전투 결과와 재진입 버튼만 보여주는 최소 허브 씬을 생성합니다.
+        /// </summary>
+        private static void CreateHubScene()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            scene.name = PrototypeSessionRuntime.HubSceneName;
+
+            CreateCamera();
+            CreateLight();
+
+            var hubRoot = new GameObject("PrototypeHubRoot");
+            hubRoot.AddComponent<PrototypeHubPresenter>();
+
+            EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), HubScenePath);
+        }
+
+        /// <summary>
+        /// 기존 머티리얼이 있으면 재사용하고, 없으면 요청한 기본 색으로 새로 만듭니다.
+        /// </summary>
         private static Material GetOrCreateMaterial(string assetPath, Color color)
         {
             var material = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
@@ -179,6 +228,9 @@ namespace ClikerSlash.Editor
             return material;
         }
 
+        /// <summary>
+        /// 기존 큐브 프리팹이 있으면 반환하고, 없으면 프로토타입 액터 비주얼용으로 생성합니다.
+        /// </summary>
         private static GameObject GetOrCreateCubePrefab(string assetPath, Material material, Vector3 scale)
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
@@ -198,6 +250,9 @@ namespace ClikerSlash.Editor
             return prefab;
         }
 
+        /// <summary>
+        /// 생성한 프리미티브에 렌더러가 있으면 공용 머티리얼을 적용합니다.
+        /// </summary>
         private static void ApplyMaterial(GameObject target, Material material)
         {
             var renderer = target.GetComponent<Renderer>();
@@ -207,6 +262,9 @@ namespace ClikerSlash.Editor
             }
         }
 
+        /// <summary>
+        /// 생성한 씬이나 프리팹을 저장하기 전에 대상 에셋 폴더가 존재하도록 보장합니다.
+        /// </summary>
         private static void EnsureFolder(string folderPath)
         {
             if (AssetDatabase.IsValidFolder(folderPath))

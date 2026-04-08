@@ -1,0 +1,21 @@
+{
+  "name": "ClikerSlash.Battle.Runtime",
+  "rootNamespace": "ClikerSlash.Battle",
+  "references": [
+    "Unity.Entities",
+    "Unity.Entities.Hybrid",
+    "Unity.Collections",
+    "Unity.Mathematics",
+    "Unity.Transforms",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
