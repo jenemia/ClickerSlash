@@ -1,0 +1,7 @@
+ClikerSlash/Library
+ClikerSlash/Logs
+ClikerSlash/Temp
+ClikerSlash/UserSettings
+ClikerSlash/obj
+*.csproj
+*.sln
