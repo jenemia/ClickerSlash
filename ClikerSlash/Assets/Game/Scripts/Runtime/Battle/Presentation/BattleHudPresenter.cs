@@ -109,13 +109,22 @@ namespace ClikerSlash.Battle
             var stats = battleQuery.GetSingleton<BattleSessionStatsState>();
             EnsureStyles();
 
-            GUILayout.BeginArea(new Rect(20f, 280f, 360f, 240f), GUI.skin.box);
+            var panelWidth = Mathf.Clamp(Screen.width * 0.28f, 420f, 520f);
+            var panelHeight = Mathf.Clamp(Screen.height * 0.36f, 300f, 360f);
+            var panelRect = new Rect(
+                20f,
+                Screen.height - panelHeight - 20f,
+                panelWidth,
+                panelHeight);
+
+            GUILayout.BeginArea(panelRect, GUI.skin.box);
             GUILayout.Label($"Money: {stats.TotalMoney}", _labelStyle);
             GUILayout.Label($"Processed: {stats.ProcessedCargoCount}", _labelStyle);
             GUILayout.Label($"Missed: {stats.MissedCargoCount}", _labelStyle);
             GUILayout.Label($"Max Combo: {stats.MaxCombo}", _labelStyle);
             GUILayout.Label($"Worked: {stats.WorkedTimeSeconds:0.0}s", _labelStyle);
 
+            GUILayout.FlexibleSpace();
             GUILayout.Space(12f);
             if (GUILayout.Button("Return To Hub", _buttonStyle, GUILayout.Height(42f)))
             {
@@ -143,6 +152,8 @@ namespace ClikerSlash.Battle
                 fontSize = 22,
                 fontStyle = FontStyle.Bold
             };
+
+            _buttonStyle.margin = new RectOffset(0, 0, 0, 0);
         }
     }
 }

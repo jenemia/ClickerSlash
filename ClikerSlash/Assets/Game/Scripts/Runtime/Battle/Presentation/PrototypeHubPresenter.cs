@@ -20,7 +20,15 @@ namespace ClikerSlash.Battle
         {
             EnsureStyles();
 
-            GUILayout.BeginArea(new Rect(20f, 20f, 480f, 420f), GUI.skin.box);
+            var panelWidth = Mathf.Clamp(Screen.width * 0.34f, 460f, 620f);
+            var panelHeight = Mathf.Clamp(Screen.height * 0.58f, 480f, 620f);
+            var panelRect = new Rect(
+                20f,
+                Mathf.Max(20f, (Screen.height - panelHeight) * 0.5f),
+                panelWidth,
+                panelHeight);
+
+            GUILayout.BeginArea(panelRect, GUI.skin.box);
             GUILayout.Label("LOGISTICS HUB", _titleStyle);
             GUILayout.Space(12f);
 
@@ -51,6 +59,7 @@ namespace ClikerSlash.Battle
                 GUILayout.Label("No shift result captured yet.", _bodyStyle);
             }
 
+            GUILayout.FlexibleSpace();
             GUILayout.Space(18f);
             if (GUILayout.Button("Start Prototype Shift", _buttonStyle, GUILayout.Height(48f)))
             {
@@ -85,6 +94,8 @@ namespace ClikerSlash.Battle
                 fontSize = 22,
                 fontStyle = FontStyle.Bold
             };
+
+            _buttonStyle.margin = new RectOffset(0, 0, 0, 0);
         }
     }
 }
