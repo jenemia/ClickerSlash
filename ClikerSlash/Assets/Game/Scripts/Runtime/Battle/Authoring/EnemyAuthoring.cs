@@ -4,29 +4,33 @@ using UnityEngine;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 모든 스폰 적이 시작할 때 기준으로 삼는 프로토타입 적 원형 값을 노출합니다.
+    /// 모든 스폰 물류가 시작할 때 기준으로 삼는 프로토타입 원형 값을 노출합니다.
     /// </summary>
-    public sealed class EnemyAuthoring : MonoBehaviour
+    public sealed class CargoAuthoring : MonoBehaviour
     {
-        [Min(1)] public int Health = 1;
+        [Min(1)] public int Weight = 6;
+        [Min(1)] public int Reward = 60;
+        [Min(1)] public int Penalty = 35;
         public float Y = 0.6f;
         [Min(0.1f)] public float MoveSpeed = 2.4f;
     }
 
     /// <summary>
-    /// 씬에 놓인 적 프로토타입 값을 ECS 데이터로 베이크합니다.
+    /// 씬에 놓인 물류 프로토타입 값을 ECS 데이터로 베이크합니다.
     /// </summary>
-    public sealed class EnemyAuthoringBaker : Baker<EnemyAuthoring>
+    public sealed class CargoAuthoringBaker : Baker<CargoAuthoring>
     {
         /// <summary>
-        /// 스폰 시스템이 일관된 기준값을 읽을 수 있도록 적 기본값을 베이크된 엔티티에 복사합니다.
+        /// 스폰 시스템이 일관된 기준값을 읽을 수 있도록 물류 기본값을 베이크된 엔티티에 복사합니다.
         /// </summary>
-        public override void Bake(EnemyAuthoring authoring)
+        public override void Bake(CargoAuthoring authoring)
         {
             var entity = GetEntity(TransformUsageFlags.None);
-            AddComponent(entity, new EnemyConfig
+            AddComponent(entity, new CargoConfig
             {
-                Health = authoring.Health,
+                Weight = authoring.Weight,
+                Reward = authoring.Reward,
+                Penalty = authoring.Penalty,
                 Y = authoring.Y,
                 MoveSpeed = authoring.MoveSpeed
             });

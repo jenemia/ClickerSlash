@@ -5,24 +5,24 @@ using Unity.Transforms;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 씬 설정 기반 싱글턴이 준비되면 런타임 전투 엔티티를 최초로 구성합니다.
+    /// 씬 설정 기반 싱글턴이 준비되면 런타임 물류 세션 엔티티를 최초로 구성합니다.
     /// </summary>
     [UpdateInGroup(typeof(InitializationSystemGroup))]
     public partial struct BattleBootstrapSystem : ISystem
     {
         /// <summary>
-        /// 베이크된 설정 싱글턴이 모두 존재할 때까지 전투 상태 초기화를 보류합니다.
+        /// 베이크된 설정 싱글턴이 모두 존재할 때까지 세션 상태 초기화를 보류합니다.
         /// </summary>
         public void OnCreate(ref SystemState state)
         {
             state.RequireForUpdate<BattleConfig>();
             state.RequireForUpdate<PlayerConfig>();
-            state.RequireForUpdate<EnemyConfig>();
+            state.RequireForUpdate<CargoConfig>();
             state.RequireForUpdate<LaneLayout>();
         }
 
         /// <summary>
-        /// 씬 부트스트랩당 한 번만 전투 싱글턴 상태와 플레이어 런타임 엔티티를 생성합니다.
+        /// 씬 부트스트랩당 한 번만 세션 싱글턴 상태와 플레이어 런타임 엔티티를 생성합니다.
         /// </summary>
         public void OnUpdate(ref SystemState state)
         {
@@ -38,11 +38,14 @@ namespace ClikerSlash.Battle
             var laneXs = state.EntityManager.GetBuffer<LaneWorldXElement>(laneEntity);
             var initialLane = BattleLaneUtility.ClampLane(playerConfig.InitialLane, laneXs.Length);
             var playerX = BattleLaneUtility.GetLaneX(laneXs, initialLane);
+            var resolvedWorkDuration = PrototypeSessionRuntime.ResolveWorkDuration(
+                battleConfig.BaseWorkDurationSeconds,
+                battleConfig.HealthDurationBonusSeconds);
 
-            // 후속 시스템이 한 기준 엔티티에서 읽을 수 있도록 전투 싱글턴 상태를 설정 엔티티에 붙입니다.
             state.EntityManager.AddComponentData(configEntity, new StageProgressState
             {
-                RemainingTime = battleConfig.BattleDurationSeconds,
+                RemainingWorkTime = resolvedWorkDuration,
+                ElapsedWorkTime = 0f,
                 IsFinished = 0
             });
             state.EntityManager.AddComponentData(configEntity, new SpawnTimerState
@@ -52,22 +55,21 @@ namespace ClikerSlash.Battle
             });
             state.EntityManager.AddComponentData(configEntity, new BattleOutcomeState
             {
-                HasOutcome = 0,
-                IsVictory = 0
+                HasOutcome = 0
             });
             state.EntityManager.AddComponentData(configEntity, new BattleSessionStatsState
             {
-                KillCount = 0,
+                TotalMoney = 0,
+                ProcessedCargoCount = 0,
+                MissedCargoCount = 0,
                 CurrentCombo = 0,
                 MaxCombo = 0,
-                SurvivalTimeSeconds = 0f,
-                RemainingLives = battleConfig.StartingLives,
-                HasSnapshot = 0,
-                IsVictory = 0
+                WorkedTimeSeconds = 0f,
+                ResolvedWorkDurationSeconds = resolvedWorkDuration,
+                HasSnapshot = 0
             });
             state.EntityManager.AddComponent<BattleRuntimeInitializedTag>(configEntity);
 
-            // 기본 이동, 공격, 세션 추적 상태를 가진 단일 플레이어 런타임 엔티티를 생성합니다.
             var playerEntity = state.EntityManager.CreateEntity();
             state.EntityManager.AddComponentData(playerEntity, new PlayerTag());
             state.EntityManager.AddComponentData(playerEntity, new LaneIndex { Value = initialLane });
@@ -78,10 +80,8 @@ namespace ClikerSlash.Battle
                 Progress = 0f,
                 IsMoving = 0
             });
-            state.EntityManager.AddComponentData(playerEntity, new AttackCooldown { Remaining = 0f });
-            state.EntityManager.AddComponentData(playerEntity, new AutoAttackProfile { Interval = battleConfig.AttackInterval });
-            state.EntityManager.AddComponentData(playerEntity, new TargetSelectionState { Target = Entity.Null });
-            state.EntityManager.AddComponentData(playerEntity, new LifeState { Value = battleConfig.StartingLives });
+            state.EntityManager.AddComponentData(playerEntity, new HandleState { BusyUntilTime = 0d });
+            state.EntityManager.AddComponentData(playerEntity, new MaxHandleWeight { Value = battleConfig.StartingMaxHandleWeight });
             state.EntityManager.AddComponentData(playerEntity, new ComboState { Current = 0, Max = 0 });
             state.EntityManager.AddComponentData(playerEntity, LocalTransform.FromPositionRotationScale(
                 new float3(playerX, playerConfig.Y, playerConfig.Z),

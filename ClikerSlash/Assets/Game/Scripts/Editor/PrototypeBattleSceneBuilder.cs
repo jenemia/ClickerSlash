@@ -9,47 +9,45 @@ using UnityEngine.UI;
 namespace ClikerSlash.Editor
 {
     /// <summary>
-    /// 한 번의 메뉴 실행으로 프로토타입 전투 씬과 허브 씬을 다시 생성하는 빌더입니다.
+    /// 한 번의 메뉴 실행으로 프로토타입 물류 씬과 허브 씬을 다시 생성하는 빌더입니다.
     /// </summary>
     public static class PrototypeBattleSceneBuilder
     {
         private const string ScenePath = "Assets/Game/Scenes/PrototypeBattle.unity";
         private const string HubScenePath = "Assets/Game/Scenes/PrototypeHub.unity";
-        private const string PlayerPrefabPath = "Assets/Game/Prefabs/PlayerCube.prefab";
-        private const string EnemyPrefabPath = "Assets/Game/Prefabs/EnemyCube.prefab";
-        private const string PlayerMaterialPath = "Assets/Game/Materials/PlayerCube.mat";
-        private const string EnemyMaterialPath = "Assets/Game/Materials/EnemyCube.mat";
+        private const string WorkerPrefabPath = "Assets/Game/Prefabs/PlayerCube.prefab";
+        private const string CargoPrefabPath = "Assets/Game/Prefabs/CargoCube.prefab";
+        private const string WorkerMaterialPath = "Assets/Game/Materials/PlayerCube.mat";
+        private const string CargoMaterialPath = "Assets/Game/Materials/CargoCube.mat";
         private const string LaneMaterialPath = "Assets/Game/Materials/LaneStrip.mat";
         private const string AccentMaterialPath = "Assets/Game/Materials/LineAccent.mat";
 
         [MenuItem("Tools/ClikerSlash/Build Prototype Battle Scene")]
         public static void BuildPrototypeBattleScene()
         {
-            // 생성 산출물이 항상 같은 프로젝트 구조에 배치되도록 필요한 폴더를 먼저 보장합니다.
             EnsureFolder("Assets/Game");
             EnsureFolder("Assets/Game/Scenes");
             EnsureFolder("Assets/Game/Prefabs");
             EnsureFolder("Assets/Game/Materials");
             EnsureFolder("Assets/Game/UI");
 
-            var playerMaterial = GetOrCreateMaterial(PlayerMaterialPath, new Color(0.20f, 0.90f, 1.00f));
-            var enemyMaterial = GetOrCreateMaterial(EnemyMaterialPath, new Color(1.00f, 0.35f, 0.35f));
+            var workerMaterial = GetOrCreateMaterial(WorkerMaterialPath, new Color(0.20f, 0.90f, 1.00f));
+            var cargoMaterial = GetOrCreateMaterial(CargoMaterialPath, new Color(1.00f, 0.55f, 0.20f));
             var laneMaterial = GetOrCreateMaterial(LaneMaterialPath, new Color(0.10f, 0.14f, 0.22f));
             var accentMaterial = GetOrCreateMaterial(AccentMaterialPath, new Color(0.95f, 0.75f, 0.10f));
 
-            var playerPrefab = GetOrCreateCubePrefab(PlayerPrefabPath, playerMaterial, new Vector3(1.1f, 1.1f, 1.1f));
-            var enemyPrefab = GetOrCreateCubePrefab(EnemyPrefabPath, enemyMaterial, new Vector3(0.9f, 0.9f, 0.9f));
+            var workerPrefab = GetOrCreateCubePrefab(WorkerPrefabPath, workerMaterial, new Vector3(1.1f, 1.1f, 1.1f));
+            var cargoPrefab = GetOrCreateCubePrefab(CargoPrefabPath, cargoMaterial, new Vector3(0.9f, 0.9f, 0.9f));
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             scene.name = "PrototypeBattle";
 
-            // 반복 실행 시에도 결과가 흔들리지 않도록 전투 씬 전체를 처음부터 다시 만듭니다.
             var battleView = CreateBattleViewRoot();
             CreateCamera(battleView);
             CreateLight();
             var laneRoot = CreateLaneVisualRoot(battleView, laneMaterial, accentMaterial);
             CreateConfigRoots(battleView, laneRoot);
-            CreatePresentationRoot(playerPrefab, enemyPrefab);
+            CreatePresentationRoot(workerPrefab, cargoPrefab);
             CreateHudRoot();
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
@@ -62,7 +60,7 @@ namespace ClikerSlash.Editor
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log($"Prototype battle scene generated at {ScenePath}");
+            Debug.Log($"Prototype logistics scene generated at {ScenePath}");
         }
 
         private static BattleViewAuthoring CreateBattleViewRoot()
@@ -77,15 +75,13 @@ namespace ClikerSlash.Editor
             battleView.LaneLength = 15f;
             battleView.LaneCenterZ = 3f;
             battleView.LineVisualWidth = 16f;
-            battleView.SpawnLineZ = 10.5f;
-            battleView.DefenseLineZ = -4.5f;
+            battleView.CargoSpawnZ = 10.5f;
+            battleView.JudgmentLineZ = -2.8f;
+            battleView.FailLineZ = -3.8f;
             battleView.PlayerZ = -3f;
             return battleView;
         }
 
-        /// <summary>
-        /// 전투 씬과 경량 허브 씬에서 공통으로 사용하는 고정 카메라를 만듭니다.
-        /// </summary>
         private static void CreateCamera()
         {
             var cameraObject = new GameObject("Main Camera");
@@ -118,9 +114,6 @@ namespace ClikerSlash.Editor
             cameraObject.transform.rotation = Quaternion.Euler(battleView.CameraRotation);
         }
 
-        /// <summary>
-        /// 별도 라이팅 세팅 없이도 프로토타입이 읽히도록 단일 방향광을 추가합니다.
-        /// </summary>
         private static void CreateLight()
         {
             var lightObject = new GameObject("Directional Light");
@@ -131,9 +124,6 @@ namespace ClikerSlash.Editor
             lightObject.transform.rotation = Quaternion.Euler(45f, -30f, 0f);
         }
 
-        /// <summary>
-        /// 스폰 지점과 방어선 경계를 읽을 수 있도록 레인 바닥과 상하 라인을 생성합니다.
-        /// </summary>
         private static GameObject CreateLaneVisualRoot(BattleViewAuthoring battleView, Material laneMaterial, Material accentMaterial)
         {
             var root = new GameObject("LaneVisualRoot");
@@ -151,14 +141,12 @@ namespace ClikerSlash.Editor
                 Object.DestroyImmediate(laneStrip.GetComponent<Collider>());
             }
 
-            CreateLineVisual(root.transform, accentMaterial, "SpawnLine", new Vector3(0f, 0.07f, battleView.SpawnLineZ), new Vector3(battleView.LineVisualWidth, 0.05f, 0.3f));
-            CreateLineVisual(root.transform, accentMaterial, "DefenseLine", new Vector3(0f, 0.07f, battleView.DefenseLineZ), new Vector3(battleView.LineVisualWidth, 0.05f, 0.3f));
+            CreateLineVisual(root.transform, accentMaterial, "CargoSpawnLine", new Vector3(0f, 0.07f, battleView.CargoSpawnZ), new Vector3(battleView.LineVisualWidth, 0.05f, 0.3f));
+            CreateLineVisual(root.transform, accentMaterial, "JudgmentLine", new Vector3(0f, 0.07f, battleView.JudgmentLineZ), new Vector3(battleView.LineVisualWidth, 0.05f, 0.3f));
+            CreateLineVisual(root.transform, accentMaterial, "FailLine", new Vector3(0f, 0.07f, battleView.FailLineZ), new Vector3(battleView.LineVisualWidth, 0.05f, 0.3f));
             return root;
         }
 
-        /// <summary>
-        /// 스폰선이나 방어선처럼 직선 경계를 표현하는 단순 큐브 기반 마커를 만듭니다.
-        /// </summary>
         private static void CreateLineVisual(Transform parent, Material material, string name, Vector3 position, Vector3 scale)
         {
             var line = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -170,55 +158,51 @@ namespace ClikerSlash.Editor
             Object.DestroyImmediate(line.GetComponent<Collider>());
         }
 
-        /// <summary>
-        /// ECS 부트스트랩이 읽을 초기 전투 설정용 씬 구성 오브젝트를 생성합니다.
-        /// </summary>
         private static void CreateConfigRoots(BattleViewAuthoring battleView, GameObject laneRoot)
         {
             var battleConfigRoot = new GameObject("BattleConfig");
             var battleConfig = battleConfigRoot.AddComponent<BattleConfigAuthoring>();
             battleConfigRoot.AddComponent<BattleSceneBootstrap>();
-            battleConfig.BattleDurationSeconds = 60f;
-            battleConfig.StartingLives = 3;
+            battleConfig.BaseWorkDurationSeconds = PrototypeSessionRuntime.DefaultBaseWorkDurationSeconds;
+            battleConfig.HealthDurationBonusSeconds = PrototypeSessionRuntime.DefaultHealthDurationBonusSeconds;
             battleConfig.PlayerMoveDuration = 0.22f;
-            battleConfig.AttackInterval = 0.4f;
+            battleConfig.HandleDurationSeconds = 0.4f;
             battleConfig.SpawnInterval = 0.9f;
-            battleConfig.EnemySpawnZ = battleView.SpawnLineZ;
-            battleConfig.DefenseLineZ = battleView.DefenseLineZ;
+            battleConfig.CargoSpawnZ = battleView.CargoSpawnZ;
+            battleConfig.JudgmentLineZ = battleView.JudgmentLineZ;
+            battleConfig.FailLineZ = battleView.FailLineZ;
+            battleConfig.HandleWindowHalfDepth = 0.45f;
+            battleConfig.StartingMaxHandleWeight = 10;
 
-            var playerRoot = new GameObject("PlayerSpawn");
+            var playerRoot = new GameObject("WorkerSpawn");
             var playerAuthoring = playerRoot.AddComponent<PlayerAuthoring>();
             playerAuthoring.InitialLane = 1;
             playerAuthoring.Y = 0.6f;
             playerAuthoring.Z = battleView.PlayerZ;
 
-            var enemyRoot = new GameObject("EnemyPrefabReference");
-            var enemyAuthoring = enemyRoot.AddComponent<EnemyAuthoring>();
-            enemyAuthoring.Health = 1;
-            enemyAuthoring.Y = 0.6f;
-            enemyAuthoring.MoveSpeed = 2.4f;
+            var cargoRoot = new GameObject("CargoPrototype");
+            var cargoAuthoring = cargoRoot.AddComponent<CargoAuthoring>();
+            cargoAuthoring.Weight = 6;
+            cargoAuthoring.Reward = 60;
+            cargoAuthoring.Penalty = 35;
+            cargoAuthoring.Y = 0.6f;
+            cargoAuthoring.MoveSpeed = 2.4f;
 
             laneRoot.transform.position = Vector3.zero;
         }
 
-        /// <summary>
-        /// 생성한 플레이어/적 프리팹을 프레젠테이션 브리지에 연결합니다.
-        /// </summary>
-        private static void CreatePresentationRoot(GameObject playerPrefab, GameObject enemyPrefab)
+        private static void CreatePresentationRoot(GameObject workerPrefab, GameObject cargoPrefab)
         {
             var presentationRoot = new GameObject("BattlePresentationRoot");
             var bridge = presentationRoot.AddComponent<BattlePresentationBridge>();
 
-            var playerField = typeof(BattlePresentationBridge).GetField("playerViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var enemyField = typeof(BattlePresentationBridge).GetField("enemyViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            playerField?.SetValue(bridge, playerPrefab);
-            enemyField?.SetValue(bridge, enemyPrefab);
+            var workerField = typeof(BattlePresentationBridge).GetField("playerViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cargoField = typeof(BattlePresentationBridge).GetField("cargoViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            workerField?.SetValue(bridge, workerPrefab);
+            cargoField?.SetValue(bridge, cargoPrefab);
             EditorUtility.SetDirty(bridge);
         }
 
-        /// <summary>
-        /// 가로형 프로토타입에서 사용하는 Canvas HUD를 생성합니다.
-        /// </summary>
         private static void CreateHudRoot()
         {
             var hudRoot = new GameObject("HUDRoot");
@@ -235,22 +219,22 @@ namespace ClikerSlash.Editor
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf") ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
 
             var infoText = CreateHudText("InfoText", hudRoot.transform, font, 28, TextAnchor.UpperLeft);
-            SetRect(infoText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -26f), new Vector2(360f, 140f));
-            infoText.text = "Time 60.0\nLives 3";
+            SetRect(infoText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -26f), new Vector2(360f, 160f));
+            infoText.text = "Work 30.0s\nMoney 0\nCombo 0";
 
             var laneText = CreateHudText("LaneText", hudRoot.transform, font, 30, TextAnchor.UpperCenter);
-            SetRect(laneText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -26f), new Vector2(280f, 80f));
-            laneText.text = "Lane 2 / 4";
+            SetRect(laneText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -26f), new Vector2(320f, 110f));
+            laneText.text = "Lane 2 / 4\nMax Weight 10";
 
             var controlsText = CreateHudText("ControlsText", hudRoot.transform, font, 24, TextAnchor.LowerCenter);
             SetRect(controlsText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 22f), new Vector2(500f, 60f));
             controlsText.text = "Controls: A / D or Left / Right";
 
             var resultText = CreateHudText("ResultText", hudRoot.transform, font, 56, TextAnchor.MiddleCenter);
-            SetRect(resultText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 140f), new Vector2(640f, 100f));
+            SetRect(resultText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 140f), new Vector2(720f, 100f));
             resultText.fontStyle = FontStyle.Bold;
             resultText.color = new Color(1f, 0.85f, 0.25f);
-            resultText.text = "VICTORY";
+            resultText.text = "SHIFT COMPLETE";
             resultText.gameObject.SetActive(false);
 
             presenter.Bind(infoText, laneText, resultText, controlsText);
@@ -279,9 +263,6 @@ namespace ClikerSlash.Editor
             rectTransform.sizeDelta = sizeDelta;
         }
 
-        /// <summary>
-        /// 마지막 전투 결과와 재진입 버튼만 보여주는 최소 허브 씬을 생성합니다.
-        /// </summary>
         private static void CreateHubScene()
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -296,9 +277,6 @@ namespace ClikerSlash.Editor
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), HubScenePath);
         }
 
-        /// <summary>
-        /// 기존 머티리얼이 있으면 재사용하고, 없으면 요청한 기본 색으로 새로 만듭니다.
-        /// </summary>
         private static Material GetOrCreateMaterial(string assetPath, Color color)
         {
             var material = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
@@ -318,9 +296,6 @@ namespace ClikerSlash.Editor
             return material;
         }
 
-        /// <summary>
-        /// 기존 큐브 프리팹이 있으면 반환하고, 없으면 프로토타입 액터 비주얼용으로 생성합니다.
-        /// </summary>
         private static GameObject GetOrCreateCubePrefab(string assetPath, Material material, Vector3 scale)
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
@@ -340,9 +315,6 @@ namespace ClikerSlash.Editor
             return prefab;
         }
 
-        /// <summary>
-        /// 생성한 프리미티브에 렌더러가 있으면 공용 머티리얼을 적용합니다.
-        /// </summary>
         private static void ApplyMaterial(GameObject target, Material material)
         {
             var renderer = target.GetComponent<Renderer>();
@@ -352,9 +324,6 @@ namespace ClikerSlash.Editor
             }
         }
 
-        /// <summary>
-        /// 생성한 씬이나 프리팹을 저장하기 전에 대상 에셋 폴더가 존재하도록 보장합니다.
-        /// </summary>
         private static void EnsureFolder(string folderPath)
         {
             if (AssetDatabase.IsValidFolder(folderPath))
@@ -362,14 +331,18 @@ namespace ClikerSlash.Editor
                 return;
             }
 
-            var parentPath = System.IO.Path.GetDirectoryName(folderPath)?.Replace("\\", "/");
-            var folderName = System.IO.Path.GetFileName(folderPath);
-            if (!string.IsNullOrEmpty(parentPath) && !AssetDatabase.IsValidFolder(parentPath))
+            var parts = folderPath.Split('/');
+            var current = parts[0];
+            for (var i = 1; i < parts.Length; i++)
             {
-                EnsureFolder(parentPath);
-            }
+                var next = $"{current}/{parts[i]}";
+                if (!AssetDatabase.IsValidFolder(next))
+                {
+                    AssetDatabase.CreateFolder(current, parts[i]);
+                }
 
-            AssetDatabase.CreateFolder(parentPath ?? "Assets", folderName);
+                current = next;
+            }
         }
     }
 }

@@ -1,42 +1,53 @@
 using Unity.Entities;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 씬에서 프로토타입 전투의 최상위 밸런스 값을 노출합니다.
+    /// 씬에서 프로토타입 물류 세션의 최상위 밸런스 값을 노출합니다.
     /// </summary>
     public sealed class BattleConfigAuthoring : MonoBehaviour
     {
-        [Min(1f)] public float BattleDurationSeconds = 60f;
-        [Min(1)] public int StartingLives = 3;
+        [FormerlySerializedAs("BattleDurationSeconds")]
+        [Min(5f)] public float BaseWorkDurationSeconds = PrototypeSessionRuntime.DefaultBaseWorkDurationSeconds;
+        [Min(0f)] public float HealthDurationBonusSeconds = PrototypeSessionRuntime.DefaultHealthDurationBonusSeconds;
         [Min(0.05f)] public float PlayerMoveDuration = 0.22f;
-        [Min(0.05f)] public float AttackInterval = 0.4f;
+        [FormerlySerializedAs("AttackInterval")]
+        [Min(0.05f)] public float HandleDurationSeconds = 0.4f;
         [Min(0.05f)] public float SpawnInterval = 0.9f;
-        public float EnemySpawnZ = 8.5f;
-        public float DefenseLineZ = -3.5f;
+        [FormerlySerializedAs("EnemySpawnZ")]
+        public float CargoSpawnZ = 8.5f;
+        [Min(0.05f)] public float HandleWindowHalfDepth = 0.45f;
+        public float JudgmentLineZ = -2.8f;
+        [FormerlySerializedAs("DefenseLineZ")]
+        public float FailLineZ = -3.8f;
+        [Min(1)] public int StartingMaxHandleWeight = 10;
     }
 
     /// <summary>
-    /// 씬 설정 단계의 전투 설정값을 ECS 싱글턴 데이터로 변환합니다.
+    /// 씬 설정 단계의 물류 세션 설정값을 ECS 싱글턴 데이터로 변환합니다.
     /// </summary>
     public sealed class BattleConfigAuthoringBaker : Baker<BattleConfigAuthoring>
     {
         /// <summary>
-        /// 런타임 시스템이 하나의 기준 설정을 읽을 수 있도록 불변 전투 설정을 베이킹 엔티티에 기록합니다.
+        /// 런타임 시스템이 하나의 기준 설정을 읽을 수 있도록 불변 세션 설정을 베이킹 엔티티에 기록합니다.
         /// </summary>
         public override void Bake(BattleConfigAuthoring authoring)
         {
             var entity = GetEntity(TransformUsageFlags.None);
             AddComponent(entity, new BattleConfig
             {
-                BattleDurationSeconds = authoring.BattleDurationSeconds,
-                StartingLives = authoring.StartingLives,
+                BaseWorkDurationSeconds = authoring.BaseWorkDurationSeconds,
+                HealthDurationBonusSeconds = authoring.HealthDurationBonusSeconds,
                 PlayerMoveDuration = authoring.PlayerMoveDuration,
-                AttackInterval = authoring.AttackInterval,
+                HandleDurationSeconds = authoring.HandleDurationSeconds,
                 SpawnInterval = authoring.SpawnInterval,
-                EnemySpawnZ = authoring.EnemySpawnZ,
-                DefenseLineZ = authoring.DefenseLineZ
+                CargoSpawnZ = authoring.CargoSpawnZ,
+                JudgmentLineZ = authoring.JudgmentLineZ,
+                FailLineZ = authoring.FailLineZ,
+                HandleWindowHalfDepth = authoring.HandleWindowHalfDepth,
+                StartingMaxHandleWeight = authoring.StartingMaxHandleWeight
             });
         }
     }

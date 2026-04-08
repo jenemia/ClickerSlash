@@ -3,17 +3,16 @@ using UnityEngine;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 프로토타입 전투 결과 화면으로 넘기는 직렬화 가능한 런타임 스냅샷입니다.
+    /// 프로토타입 작업 결과 화면으로 넘기는 직렬화 가능한 런타임 스냅샷입니다.
     /// </summary>
     public struct BattleResultSnapshot
     {
-        // 0은 이번 전투가 패배로 끝났음을, 1은 생존 성공으로 끝났음을 뜻합니다.
-        public byte IsVictory;
-        public int KillCount;
+        public int TotalMoney;
+        public int ProcessedCargoCount;
+        public int MissedCargoCount;
         public int CurrentCombo;
         public int MaxCombo;
-        public float SurvivalTimeSeconds;
-        public int RemainingLives;
+        public float WorkedTimeSeconds;
     }
 
     /// <summary>
@@ -23,15 +22,20 @@ namespace ClikerSlash.Battle
     {
         public const string BattleSceneName = "PrototypeBattle";
         public const string HubSceneName = "PrototypeHub";
+        public const int MinimumHealthLevel = 1;
+        public const float DefaultBaseWorkDurationSeconds = 30f;
+        public const float DefaultHealthDurationBonusSeconds = 10f;
 
-        // 참이면 허브가 이전 전투에서 캡처한 결과 스냅샷을 표시해야 합니다.
+        // 참이면 허브가 이전 작업에서 캡처한 결과 스냅샷을 표시해야 합니다.
         public static bool HasLastBattleResult { get; private set; }
         public static BattleResultSnapshot LastBattleResult { get; private set; }
-        // 참이면 허브에서 전투로 넘어가는 중이며, 전투 씬이 아직 요청을 소비하지 않은 상태입니다.
+        public static int HealthLevel { get; private set; } = MinimumHealthLevel;
+        public static float ResolvedWorkDurationSeconds { get; private set; }
+        // 참이면 허브에서 작업 현장으로 넘어가는 중이며, 전투 씬이 아직 요청을 소비하지 않은 상태입니다.
         public static bool HasPendingBattleEntryRequest { get; private set; }
 
         /// <summary>
-        /// 다음 씬이 저장 데이터 없이도 읽을 수 있도록 마지막 전투 결과를 저장합니다.
+        /// 다음 씬이 저장 데이터 없이도 읽을 수 있도록 마지막 작업 결과를 저장합니다.
         /// </summary>
         public static void StoreBattleResult(BattleResultSnapshot snapshot)
         {
@@ -49,7 +53,44 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
-        /// 사용자가 전투 씬 밖에서 새 전투 진입을 요청했음을 표시합니다.
+        /// 허브 메타와 마지막 결과를 포함한 프로토타입 런타임 상태를 초기값으로 되돌립니다.
+        /// </summary>
+        public static void ResetPrototypeState()
+        {
+            HasLastBattleResult = false;
+            LastBattleResult = default;
+            HealthLevel = MinimumHealthLevel;
+            ResolvedWorkDurationSeconds = 0f;
+            HasPendingBattleEntryRequest = false;
+        }
+
+        /// <summary>
+        /// 허브 임시 메타 상태에서 체력 레벨을 1 올립니다.
+        /// </summary>
+        public static void IncreaseHealthLevel()
+        {
+            HealthLevel += 1;
+        }
+
+        /// <summary>
+        /// 현재 체력 레벨을 기준으로 다음 세션 예상 작업시간을 계산합니다.
+        /// </summary>
+        public static float PreviewResolvedWorkDuration()
+        {
+            return CalculateWorkDuration(HealthLevel, DefaultBaseWorkDurationSeconds, DefaultHealthDurationBonusSeconds);
+        }
+
+        /// <summary>
+        /// 실제 세션 설정값을 기준으로 이번 진입의 작업시간을 계산하고 캐시합니다.
+        /// </summary>
+        public static float ResolveWorkDuration(float baseWorkDurationSeconds, float healthDurationBonusSeconds)
+        {
+            ResolvedWorkDurationSeconds = CalculateWorkDuration(HealthLevel, baseWorkDurationSeconds, healthDurationBonusSeconds);
+            return ResolvedWorkDurationSeconds;
+        }
+
+        /// <summary>
+        /// 사용자가 작업 씬 밖에서 새 작업 진입을 요청했음을 표시합니다.
         /// </summary>
         public static void RequestBattleEntry()
         {
@@ -57,11 +98,17 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
-        /// 전투 씬이 진입 요청을 인지한 뒤 대기 중인 진입 플래그를 지웁니다.
+        /// 작업 씬이 진입 요청을 인지한 뒤 대기 중인 진입 플래그를 지웁니다.
         /// </summary>
         public static void ConsumeBattleEntryRequest()
         {
             HasPendingBattleEntryRequest = false;
+        }
+
+        private static float CalculateWorkDuration(int healthLevel, float baseWorkDurationSeconds, float healthDurationBonusSeconds)
+        {
+            var normalizedHealthLevel = Mathf.Max(MinimumHealthLevel, healthLevel);
+            return baseWorkDurationSeconds + (normalizedHealthLevel - MinimumHealthLevel) * healthDurationBonusSeconds;
         }
 
         /// <summary>
@@ -70,9 +117,7 @@ namespace ClikerSlash.Battle
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStaticState()
         {
-            HasLastBattleResult = false;
-            LastBattleResult = default;
-            HasPendingBattleEntryRequest = false;
+            ResetPrototypeState();
         }
     }
 }

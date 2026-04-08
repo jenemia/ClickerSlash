@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace ClikerSlash.Battle
 {
@@ -13,8 +14,11 @@ namespace ClikerSlash.Battle
         [Min(0.1f)] public float LaneLength = 15f;
         public float LaneCenterZ = 3f;
         [Min(0.1f)] public float LineVisualWidth = 16f;
-        public float SpawnLineZ = 10.5f;
-        public float DefenseLineZ = -4.5f;
+        [FormerlySerializedAs("SpawnLineZ")]
+        public float CargoSpawnZ = 10.5f;
+        public float JudgmentLineZ = -2.8f;
+        [FormerlySerializedAs("DefenseLineZ")]
+        public float FailLineZ = -3.8f;
         public float PlayerZ = -3f;
     }
 }
