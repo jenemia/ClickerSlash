@@ -226,5 +226,53 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(layout.contentSize.y, Is.GreaterThan(0f));
             yield return null;
         }
+
+        /// <summary>
+        /// 스킬트리 뷰가 3탭 셸을 만들고 탭 전환 시 브랜치 가시성을 바꾸는지 검증합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator SkillTreeViewBuildsTabsAndSwitchesVisibleBranches()
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
+
+            var viewportObject = new GameObject("Viewport", typeof(RectTransform), typeof(PrototypeHubPanZoomController), typeof(PrototypeHubSkillTreeView));
+            var viewportRect = viewportObject.GetComponent<RectTransform>();
+            viewportRect.anchorMin = new Vector2(0.5f, 0.5f);
+            viewportRect.anchorMax = new Vector2(0.5f, 0.5f);
+            viewportRect.pivot = new Vector2(0.5f, 0.5f);
+            viewportRect.sizeDelta = new Vector2(1280f, 720f);
+
+            var contentObject = new GameObject("Content", typeof(RectTransform));
+            contentObject.transform.SetParent(viewportObject.transform, false);
+            var contentRect = contentObject.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0.5f, 0.5f);
+            contentRect.anchorMax = new Vector2(0.5f, 0.5f);
+            contentRect.pivot = new Vector2(0.5f, 0.5f);
+            contentRect.sizeDelta = new Vector2(3200f, 2200f);
+
+            var panZoomController = viewportObject.GetComponent<PrototypeHubPanZoomController>();
+            var treeView = viewportObject.GetComponent<PrototypeHubSkillTreeView>();
+            treeView.Bind(viewportRect, contentRect, panZoomController);
+            treeView.Build(catalog);
+            treeView.Refresh(snapshot, catalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
+
+            Assert.That(treeView.TabCount, Is.EqualTo(3));
+            Assert.That(treeView.ActiveTabId, Is.EqualTo(SkillTreeTabId.Human));
+            Assert.That(treeView.VisibleBranchCount, Is.EqualTo(4));
+
+            treeView.SelectTab(SkillTreeTabId.Center);
+            treeView.Refresh(snapshot, catalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
+            Assert.That(treeView.ActiveTabId, Is.EqualTo(SkillTreeTabId.Center));
+            Assert.That(treeView.VisibleBranchCount, Is.EqualTo(1));
+
+            treeView.SelectTab(SkillTreeTabId.Robot);
+            treeView.Refresh(snapshot, catalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
+            Assert.That(treeView.ActiveTabId, Is.EqualTo(SkillTreeTabId.Robot));
+            Assert.That(treeView.VisibleBranchCount, Is.EqualTo(1));
+
+            Object.Destroy(viewportObject);
+            yield return null;
+        }
     }
 }

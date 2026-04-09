@@ -17,15 +17,49 @@ namespace ClikerSlash.Battle
 
         private readonly Dictionary<string, PrototypeHubSkillTreeNodeView> _nodeViews = new Dictionary<string, PrototypeHubSkillTreeNodeView>();
         private readonly List<PrototypeHubSkillTreeEdgeRecord> _edgeViews = new List<PrototypeHubSkillTreeEdgeRecord>();
+        private readonly List<PrototypeHubSkillTreeBranchRecord> _branchRecords = new List<PrototypeHubSkillTreeBranchRecord>();
+        private readonly List<PrototypeHubSkillTreeTabRecord> _tabRecords = new List<PrototypeHubSkillTreeTabRecord>();
         private readonly List<GameObject> _runtimeObjects = new List<GameObject>();
 
         private Sprite _panelSprite;
         private PrototypeHubSkillTreeLayout _layout;
+        private SkillTreeTabId _selectedTabId;
+        private bool _hasSelectedTab;
 
         /// <summary>
         /// 노드가 눌렸을 때 프레젠터가 선택/업그레이드 로직을 처리할 수 있도록 이벤트를 전달합니다.
         /// </summary>
         public event Action<string> NodeClicked;
+
+        /// <summary>
+        /// 현재 생성된 탭 수를 테스트와 프레젠터가 읽을 수 있게 노출합니다.
+        /// </summary>
+        public int TabCount => _tabRecords.Count;
+
+        /// <summary>
+        /// 현재 선택된 탭 식별자입니다.
+        /// </summary>
+        public SkillTreeTabId ActiveTabId => _selectedTabId;
+
+        /// <summary>
+        /// 현재 화면에 노출된 브랜치 수입니다.
+        /// </summary>
+        public int VisibleBranchCount
+        {
+            get
+            {
+                var count = 0;
+                foreach (var branchRecord in _branchRecords)
+                {
+                    if (branchRecord.IsVisible)
+                    {
+                        count += 1;
+                    }
+                }
+
+                return count;
+            }
+        }
 
         /// <summary>
         /// 뷰포트, 콘텐츠 루트, 팬/줌 컨트롤러를 한 번에 연결합니다.
@@ -51,6 +85,7 @@ namespace ClikerSlash.Battle
             _layout = PrototypeHubSkillTreeLayoutBuilder.Build(catalog);
             contentRoot.sizeDelta = _layout.contentSize;
 
+            CreateTabBar(catalog);
             CreateHubNode();
 
             foreach (var branchLayout in _layout.branches)
@@ -58,6 +93,7 @@ namespace ClikerSlash.Battle
                 CreateBranch(branchLayout);
             }
 
+            ApplySelectedTabVisuals();
             panZoomController.Bind(viewport, contentRoot);
             panZoomController.FrameContent();
         }
@@ -74,6 +110,8 @@ namespace ClikerSlash.Battle
             {
                 Build(catalog);
             }
+
+            EnsureActiveTab(catalog, selectedNodeId);
 
             var statuses = MetaProgressionCalculator.DescribeAllNodes(snapshot, catalog);
             var statusByNodeId = new Dictionary<string, MetaProgressionNodeStatus>(statuses.Count);
@@ -102,9 +140,135 @@ namespace ClikerSlash.Battle
             }
         }
 
+        /// <summary>
+        /// 사용자가 탭을 눌렀을 때 해당 탭만 보이도록 전환합니다.
+        /// </summary>
+        public void SelectTab(SkillTreeTabId tabId)
+        {
+            _selectedTabId = tabId;
+            _hasSelectedTab = true;
+            ApplySelectedTabVisuals();
+        }
+
         private void HandleNodeClicked(string nodeId)
         {
             NodeClicked?.Invoke(nodeId);
+        }
+
+        /// <summary>
+        /// 선택된 노드가 있으면 그 탭을 기본값으로 삼고, 없으면 첫 탭을 활성화합니다.
+        /// </summary>
+        private void EnsureActiveTab(MetaProgressionCatalogAsset catalog, string selectedNodeId)
+        {
+            if (_hasSelectedTab)
+            {
+                ApplySelectedTabVisuals();
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedNodeId) &&
+                catalog.TryGetNodeDefinition(selectedNodeId, out var selectedNodeDefinition) &&
+                selectedNodeDefinition != null &&
+                catalog.TryGetBranchDefinition(selectedNodeDefinition.branchId, out var selectedBranchDefinition) &&
+                selectedBranchDefinition != null)
+            {
+                SelectTab(selectedBranchDefinition.tabId);
+                return;
+            }
+
+            SkillTreeTabDefinition firstTabDefinition = null;
+            foreach (var tabDefinition in catalog.skillTabs)
+            {
+                if (tabDefinition == null)
+                {
+                    continue;
+                }
+
+                if (firstTabDefinition == null || tabDefinition.sortOrder < firstTabDefinition.sortOrder)
+                {
+                    firstTabDefinition = tabDefinition;
+                }
+            }
+
+            SelectTab(firstTabDefinition != null ? firstTabDefinition.tabId : SkillTreeTabId.Human);
+        }
+
+        /// <summary>
+        /// 탭 바 버튼을 만들고 추후 색상 갱신에 필요한 레코드를 보관합니다.
+        /// </summary>
+        private void CreateTabBar(MetaProgressionCatalogAsset catalog)
+        {
+            var tabBar = CreateRectTransform("TabBar", viewport, new Vector2(700f, 72f));
+            tabBar.anchorMin = new Vector2(0.5f, 1f);
+            tabBar.anchorMax = new Vector2(0.5f, 1f);
+            tabBar.pivot = new Vector2(0.5f, 1f);
+            tabBar.anchoredPosition = new Vector2(0f, -18f);
+            _runtimeObjects.Add(tabBar.gameObject);
+
+            var sortedTabs = new List<SkillTreeTabDefinition>();
+            foreach (var tabDefinition in catalog.skillTabs)
+            {
+                if (tabDefinition != null)
+                {
+                    sortedTabs.Add(tabDefinition);
+                }
+            }
+
+            sortedTabs.Sort((left, right) => left.sortOrder.CompareTo(right.sortOrder));
+            for (var index = 0; index < sortedTabs.Count; index += 1)
+            {
+                CreateTabButton(tabBar, sortedTabs[index], index, sortedTabs.Count);
+            }
+        }
+
+        /// <summary>
+        /// 고정된 탭 한 칸을 만들고 클릭 시 현재 보이는 브랜치 묶음을 바꿉니다.
+        /// </summary>
+        private void CreateTabButton(
+            RectTransform tabBar,
+            SkillTreeTabDefinition tabDefinition,
+            int tabIndex,
+            int totalTabCount)
+        {
+            var buttonObject = new GameObject(
+                "Tab_" + tabDefinition.tabId,
+                typeof(RectTransform),
+                typeof(WrapImage),
+                typeof(Button));
+            buttonObject.transform.SetParent(tabBar, false);
+
+            var buttonRect = buttonObject.GetComponent<RectTransform>();
+            buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+            buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+            buttonRect.pivot = new Vector2(0.5f, 0.5f);
+            buttonRect.sizeDelta = new Vector2(210f, 56f);
+            buttonRect.anchoredPosition = new Vector2((tabIndex - (totalTabCount - 1) * 0.5f) * 228f, 0f);
+
+            var background = buttonObject.GetComponent<WrapImage>();
+            background.sprite = _panelSprite;
+            background.type = _panelSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+
+            var button = buttonObject.GetComponent<Button>();
+            button.onClick.AddListener(() => SelectTab(tabDefinition.tabId));
+
+            var label = CreateLabel(buttonObject.transform, "Label", new Vector2(176f, 34f));
+            label.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            label.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            label.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            label.rectTransform.anchoredPosition = Vector2.zero;
+            label.alignment = TextAlignmentOptions.Center;
+            label.fontSize = 24;
+            label.fontStyle = FontStyles.Bold;
+            label.text = tabDefinition.displayName;
+
+            _tabRecords.Add(new PrototypeHubSkillTreeTabRecord
+            {
+                tabId = tabDefinition.tabId,
+                button = button,
+                background = background,
+                label = label
+            });
+            _runtimeObjects.Add(buttonObject);
         }
 
         private void CreateHubNode()
@@ -168,6 +332,13 @@ namespace ClikerSlash.Battle
             label.color = new Color(0.89f, 0.93f, 0.84f, 0.95f);
             label.text = branchLayout.displayName;
             _runtimeObjects.Add(label.gameObject);
+
+            _branchRecords.Add(new PrototypeHubSkillTreeBranchRecord
+            {
+                tabId = branchLayout.tabId,
+                branchRoot = branchRoot,
+                branchLabel = label
+            });
         }
 
         private PrototypeHubSkillTreeNodeView CreateNodeView(Transform parent, string name)
@@ -314,6 +485,37 @@ namespace ClikerSlash.Battle
             return new Color(0.39f, 0.71f, 0.46f, 0.94f);
         }
 
+        /// <summary>
+        /// 현재 선택된 탭만 보이도록 브랜치와 탭 버튼 시각 상태를 함께 갱신합니다.
+        /// </summary>
+        private void ApplySelectedTabVisuals()
+        {
+            foreach (var branchRecord in _branchRecords)
+            {
+                var isVisible = !_hasSelectedTab || branchRecord.tabId == _selectedTabId;
+                if (branchRecord.branchRoot != null)
+                {
+                    branchRecord.branchRoot.gameObject.SetActive(isVisible);
+                }
+
+                if (branchRecord.branchLabel != null)
+                {
+                    branchRecord.branchLabel.gameObject.SetActive(isVisible);
+                }
+            }
+
+            foreach (var tabRecord in _tabRecords)
+            {
+                var isSelected = _hasSelectedTab && tabRecord.tabId == _selectedTabId;
+                tabRecord.background.color = isSelected
+                    ? new Color(0.74f, 0.59f, 0.26f, 0.98f)
+                    : new Color(0.16f, 0.20f, 0.18f, 0.95f);
+                tabRecord.label.color = isSelected
+                    ? new Color(0.14f, 0.11f, 0.06f, 1f)
+                    : new Color(0.86f, 0.92f, 0.86f, 0.96f);
+            }
+        }
+
         private void EnsureResources()
         {
         }
@@ -322,6 +524,8 @@ namespace ClikerSlash.Battle
         {
             _nodeViews.Clear();
             _edgeViews.Clear();
+            _branchRecords.Clear();
+            _tabRecords.Clear();
 
             foreach (var runtimeObject in _runtimeObjects)
             {
@@ -535,5 +739,31 @@ namespace ClikerSlash.Battle
     {
         public string childNodeId;
         public PrototypeHubSkillTreeEdgeView edgeView;
+    }
+
+    /// <summary>
+    /// 탭별로 묶인 브랜치 루트와 라벨을 함께 관리하는 레코드입니다.
+    /// </summary>
+    public sealed class PrototypeHubSkillTreeBranchRecord
+    {
+        public SkillTreeTabId tabId;
+        public RectTransform branchRoot;
+        public WrapLabel branchLabel;
+
+        /// <summary>
+        /// 브랜치 루트가 활성 상태인지 테스트와 갱신 코드가 쉽게 읽게 합니다.
+        /// </summary>
+        public bool IsVisible => branchRoot != null && branchRoot.gameObject.activeSelf;
+    }
+
+    /// <summary>
+    /// 탭 버튼과 현재 색상 갱신에 필요한 참조를 묶습니다.
+    /// </summary>
+    public sealed class PrototypeHubSkillTreeTabRecord
+    {
+        public SkillTreeTabId tabId;
+        public Button button;
+        public WrapImage background;
+        public WrapLabel label;
     }
 }

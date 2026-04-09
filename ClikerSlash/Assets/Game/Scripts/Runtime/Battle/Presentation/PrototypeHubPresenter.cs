@@ -159,7 +159,7 @@ namespace ClikerSlash.Battle
             if (balanceLabel != null) balanceLabel.text = $"Balance {currency.currentBalance}";
             if (earnedLabel != null) earnedLabel.text = $"Earned {currency.totalBattleEarned}";
             if (spentLabel != null) spentLabel.text = $"Spent {currency.totalSkillSpent}";
-            if (controlsLabel != null) controlsLabel.text = "드래그 이동 / 휠 줌 / 클릭 업그레이드";
+            if (controlsLabel != null) controlsLabel.text = "상단 탭 전환 / 드래그 이동 / 휠 줌 / 클릭 업그레이드";
             if (resultLabel != null) resultLabel.text = BuildResultSummary();
 
             if (skillTreeView != null)
@@ -191,6 +191,7 @@ namespace ClikerSlash.Battle
             if (selectionBodyLabel != null)
             {
                 selectionBodyLabel.text =
+                    $"탭: {selectedNodeStatus.tabDisplayName}\n" +
                     $"브랜치: {selectedNodeStatus.branchDisplayName}\n" +
                     $"티어: {selectedNodeStatus.tier}\n" +
                     $"레벨: {selectedNodeStatus.currentLevel}/{selectedNodeStatus.maxLevel}\n" +

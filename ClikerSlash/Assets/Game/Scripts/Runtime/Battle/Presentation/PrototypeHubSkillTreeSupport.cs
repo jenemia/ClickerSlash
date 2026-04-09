@@ -57,6 +57,7 @@ namespace ClikerSlash.Battle
     /// </summary>
     public sealed class PrototypeHubSkillTreeBranchLayout
     {
+        public SkillTreeTabId tabId;
         public SkillBranchId branchId;
         public string displayName;
         public int sortOrder;
@@ -191,6 +192,7 @@ namespace ClikerSlash.Battle
             var lateralByNodeId = ResolveLaterals(nodesForBranch, depthByNodeId, parentsByNodeId);
             var branchLayout = new PrototypeHubSkillTreeBranchLayout
             {
+                tabId = branchDefinition.tabId,
                 branchId = branchDefinition.branchId,
                 displayName = branchDefinition.displayName,
                 sortOrder = branchDefinition.sortOrder,
