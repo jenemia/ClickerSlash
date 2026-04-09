@@ -270,6 +270,48 @@ namespace ClikerSlash.Tests.PlayMode
             yield return null;
         }
 
+        /// <summary>
+        /// 상하차 진입/복귀 요청이 프레젠테이션 브리지의 90도 카메라 회전으로 소비되는지 검증합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockCameraTransitionRotatesAndReturns()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            SeedRuntimeCurrency(7);
+            for (var level = 0; level < 5; level += 1)
+            {
+                Assert.That(PrototypeSessionRuntime.TryUpgradeNode("management.performance_contract", catalog), Is.True);
+            }
+
+            Assert.That(PrototypeSessionRuntime.TryUpgradeNode(MetaProgressionCatalogAsset.LoadingDockUnlockNodeId, catalog), Is.True);
+
+            var cameraObject = new GameObject("LoadingDockCamera", typeof(Camera));
+            var camera = cameraObject.GetComponent<Camera>();
+            camera.transform.SetPositionAndRotation(new Vector3(0f, 10.6f, -16.8f), Quaternion.Euler(31f, 0f, 0f));
+
+            var battleViewObject = new GameObject("BattleView");
+            var battleView = battleViewObject.AddComponent<BattleViewAuthoring>();
+            battleView.CameraPosition = camera.transform.position;
+            battleView.CameraRotation = new Vector3(31f, 0f, 0f);
+
+            var bridgeObject = new GameObject("BattlePresentationRoot", typeof(BattlePresentationBridge));
+            var bridge = bridgeObject.GetComponent<BattlePresentationBridge>();
+            bridge.BindSceneReferences(camera, battleView);
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 60);
+            Assert.That(Mathf.Abs(Mathf.DeltaAngle(camera.transform.eulerAngles.y, 90f)), Is.LessThan(1f));
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.Lane, WorkAreaTransitionPhase.None, 60);
+            Assert.That(Mathf.Abs(Mathf.DeltaAngle(camera.transform.eulerAngles.y, 0f)), Is.LessThan(1f));
+
+            Object.Destroy(cameraObject);
+            Object.Destroy(battleViewObject);
+            Object.Destroy(bridgeObject);
+        }
+
         private static IEnumerator LoadSceneAndWait(string sceneName)
         {
             SceneManager.LoadScene(sceneName);
@@ -324,6 +366,28 @@ namespace ClikerSlash.Tests.PlayMode
             snapshot.currency.currentBalance = amount;
             snapshot.currency.totalBattleEarned = amount;
             PrototypeSessionRuntime.SetMetaProgressionSnapshot(snapshot, catalog);
+        }
+
+        private static IEnumerator WaitForDockPhase(
+            MetaProgressionCatalogAsset catalog,
+            WorkAreaType expectedArea,
+            WorkAreaTransitionPhase expectedPhase,
+            int maxFrames)
+        {
+            for (var frame = 0; frame < maxFrames; frame += 1)
+            {
+                var state = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+                if (state.CurrentArea == expectedArea && state.TransitionPhase == expectedPhase)
+                {
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            var finalState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(finalState.CurrentArea, Is.EqualTo(expectedArea));
+            Assert.That(finalState.TransitionPhase, Is.EqualTo(expectedPhase));
         }
     }
 }

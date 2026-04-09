@@ -13,15 +13,30 @@ namespace ClikerSlash.Battle
     {
         [SerializeField] private GameObject playerViewPrefab;
         [SerializeField] private GameObject cargoViewPrefab;
+        [SerializeField] private Camera sceneCamera;
+        [SerializeField] private BattleViewAuthoring battleView;
+        [SerializeField] [Min(0.05f)] private float loadingDockTransitionDuration = 0.35f;
+        [SerializeField] private float loadingDockYawOffset = 90f;
 
         private World _cachedWorld;
         private EntityQuery _playerQuery;
         private EntityQuery _cargoQuery;
         private GameObject _playerInstance;
         private readonly Dictionary<Entity, GameObject> _cargoInstances = new();
+        private bool _cameraPoseInitialized;
+        private WorkAreaTransitionPhase _animatedPhase;
+        private float _transitionElapsed;
+        private Vector3 _cameraTransitionStartPosition;
+        private Quaternion _cameraTransitionStartRotation;
+        private Vector3 _laneCameraPosition;
+        private Quaternion _laneCameraRotation;
+        private Vector3 _loadingDockCameraPosition;
+        private Quaternion _loadingDockCameraRotation;
 
         private void Update()
         {
+            SyncLoadingDockCamera();
+
             if (!TryPrepareQueries(out var entityManager))
             {
                 CleanupAllViews();
@@ -30,6 +45,18 @@ namespace ClikerSlash.Battle
 
             SyncPlayer(entityManager);
             SyncCargo(entityManager);
+        }
+
+        /// <summary>
+        /// 테스트나 씬 빌더가 카메라/뷰 참조를 명시적으로 연결할 때 사용합니다.
+        /// </summary>
+        public void BindSceneReferences(Camera targetCamera, BattleViewAuthoring targetBattleView)
+        {
+            sceneCamera = targetCamera;
+            battleView = targetBattleView;
+            _cameraPoseInitialized = false;
+            EnsureCameraPoseInitialized();
+            ApplyCameraPose(_laneCameraPosition, _laneCameraRotation);
         }
 
         private bool TryPrepareQueries(out EntityManager entityManager)
@@ -72,6 +99,110 @@ namespace ClikerSlash.Battle
             }
 
             _playerInstance.transform.position = transforms[0].Position;
+        }
+
+        private void SyncLoadingDockCamera()
+        {
+            if (!EnsureCameraPoseInitialized())
+            {
+                return;
+            }
+
+            var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
+            switch (dockState.TransitionPhase)
+            {
+                case WorkAreaTransitionPhase.EnteringLoadingDock:
+                    AnimateCameraTransition(
+                        WorkAreaTransitionPhase.EnteringLoadingDock,
+                        _loadingDockCameraPosition,
+                        _loadingDockCameraRotation,
+                        PrototypeSessionRuntime.ConsumeLoadingDockEntryRequest);
+                    break;
+
+                case WorkAreaTransitionPhase.ReturningToLane:
+                    AnimateCameraTransition(
+                        WorkAreaTransitionPhase.ReturningToLane,
+                        _laneCameraPosition,
+                        _laneCameraRotation,
+                        PrototypeSessionRuntime.ConsumeLoadingDockReturnRequest);
+                    break;
+
+                case WorkAreaTransitionPhase.ActiveInLoadingDock:
+                    ApplyCameraPose(_loadingDockCameraPosition, _loadingDockCameraRotation);
+                    _animatedPhase = WorkAreaTransitionPhase.ActiveInLoadingDock;
+                    break;
+
+                default:
+                    ApplyCameraPose(_laneCameraPosition, _laneCameraRotation);
+                    _animatedPhase = WorkAreaTransitionPhase.None;
+                    break;
+            }
+        }
+
+        private bool EnsureCameraPoseInitialized()
+        {
+            sceneCamera ??= Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            battleView ??= FindFirstObjectByType<BattleViewAuthoring>();
+            if (sceneCamera == null)
+            {
+                return false;
+            }
+
+            if (_cameraPoseInitialized)
+            {
+                return true;
+            }
+
+            _laneCameraPosition = battleView != null ? battleView.CameraPosition : sceneCamera.transform.position;
+            _laneCameraRotation = battleView != null
+                ? Quaternion.Euler(battleView.CameraRotation)
+                : sceneCamera.transform.rotation;
+            _loadingDockCameraPosition = _laneCameraPosition;
+            _loadingDockCameraRotation = _laneCameraRotation * Quaternion.Euler(0f, loadingDockYawOffset, 0f);
+            _animatedPhase = WorkAreaTransitionPhase.None;
+            _transitionElapsed = 0f;
+            _cameraPoseInitialized = true;
+            return true;
+        }
+
+        private void AnimateCameraTransition(
+            WorkAreaTransitionPhase targetPhase,
+            Vector3 targetPosition,
+            Quaternion targetRotation,
+            System.Action onTransitionFinished)
+        {
+            if (_animatedPhase != targetPhase)
+            {
+                _animatedPhase = targetPhase;
+                _transitionElapsed = 0f;
+                _cameraTransitionStartPosition = sceneCamera.transform.position;
+                _cameraTransitionStartRotation = sceneCamera.transform.rotation;
+            }
+
+            _transitionElapsed += Mathf.Max(Time.deltaTime, 1f / 60f);
+            var duration = Mathf.Max(0.05f, loadingDockTransitionDuration);
+            var normalizedTime = Mathf.Clamp01(_transitionElapsed / duration);
+            var easedTime = normalizedTime * normalizedTime * (3f - 2f * normalizedTime);
+            ApplyCameraPose(
+                Vector3.Lerp(_cameraTransitionStartPosition, targetPosition, easedTime),
+                Quaternion.Slerp(_cameraTransitionStartRotation, targetRotation, easedTime));
+
+            if (normalizedTime < 1f)
+            {
+                return;
+            }
+
+            onTransitionFinished?.Invoke();
+        }
+
+        private void ApplyCameraPose(Vector3 position, Quaternion rotation)
+        {
+            if (sceneCamera == null)
+            {
+                return;
+            }
+
+            sceneCamera.transform.SetPositionAndRotation(position, rotation);
         }
 
         private void SyncCargo(EntityManager entityManager)

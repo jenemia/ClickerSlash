@@ -1,6 +1,7 @@
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace ClikerSlash.Battle
@@ -71,11 +72,20 @@ namespace ClikerSlash.Battle
             var activeLaneCount = sessionRuleQuery.IsEmptyIgnoreFilter
                 ? laneLayout.LaneCount
                 : entityManager.GetComponentData<SessionRuleState>(sessionRuleQuery.GetSingletonEntity()).ActiveLaneCount;
+            var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
+                MetaProgressionCatalogAsset.LoadDefaultCatalog(),
+                activeLaneCount);
+
+            HandleLoadingDockInput(loadingDockState, activeLaneCount, outcome);
 
             infoText.text =
                 $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}";
             laneText.text =
                 $"Lane {lane.Value + 1} / {activeLaneCount}\nMax Weight {maxHandleWeight.Value}";
+            if (controlsText != null)
+            {
+                controlsText.text = BuildControlsText(loadingDockState);
+            }
 
             if (outcome.HasOutcome == 0)
             {
@@ -85,6 +95,52 @@ namespace ClikerSlash.Battle
 
             resultText.text = "SHIFT COMPLETE";
             resultText.gameObject.SetActive(true);
+        }
+
+        private static void HandleLoadingDockInput(
+            LoadingDockRuntimeState loadingDockState,
+            int physicalLaneCount,
+            BattleOutcomeState outcome)
+        {
+            if (!loadingDockState.HasLoadingDockAccess || outcome.HasOutcome != 0)
+            {
+                return;
+            }
+
+            var keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return;
+            }
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            if (loadingDockState.CurrentArea == WorkAreaType.Lane &&
+                loadingDockState.TransitionPhase == WorkAreaTransitionPhase.None &&
+                keyboard.qKey.wasPressedThisFrame)
+            {
+                PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog, physicalLaneCount);
+                return;
+            }
+
+            if (loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
+                loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock &&
+                keyboard.escapeKey.wasPressedThisFrame)
+            {
+                PrototypeSessionRuntime.TryRequestLoadingDockReturn();
+            }
+        }
+
+        private static string BuildControlsText(LoadingDockRuntimeState loadingDockState)
+        {
+            var movementControls = "Controls: A / D or Left / Right";
+            if (!loadingDockState.HasLoadingDockAccess)
+            {
+                return movementControls;
+            }
+
+            return loadingDockState.CurrentArea == WorkAreaType.LoadingDock
+                ? $"{movementControls} / Esc: Return To Lane"
+                : $"{movementControls} / Q: Loading Dock";
         }
 
         private void OnGUI()
