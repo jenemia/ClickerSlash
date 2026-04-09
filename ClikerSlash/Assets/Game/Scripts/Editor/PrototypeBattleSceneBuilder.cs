@@ -287,6 +287,7 @@ namespace ClikerSlash.Editor
         {
             var presentationRoot = new GameObject("BattlePresentationRoot");
             var bridge = presentationRoot.AddComponent<BattlePresentationBridge>();
+            presentationRoot.AddComponent<LoadingDockMiniGamePresenter>();
 
             var workerField = typeof(BattlePresentationBridge).GetField("playerViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             var cargoField = typeof(BattlePresentationBridge).GetField("cargoViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
