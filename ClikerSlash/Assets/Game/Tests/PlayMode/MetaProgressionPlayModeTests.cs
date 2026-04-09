@@ -25,10 +25,53 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(snapshot.currency.currentBalance, Is.Zero);
             Assert.That(snapshot.currency.totalBattleEarned, Is.Zero);
             Assert.That(snapshot.currency.totalSkillSpent, Is.Zero);
+            Assert.That(catalog.skillTabs.Count, Is.EqualTo(3));
             Assert.That(resolved.ActiveLaneCount, Is.EqualTo(catalog.workerBaseStats.startingUnlockedLaneCount));
             Assert.That(resolved.MaxHandleWeight, Is.EqualTo(catalog.workerBaseStats.baseMaxHandleWeight));
             Assert.That(resolved.LaneMoveDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseLaneMoveDurationSeconds).Within(0.001f));
             Assert.That(resolved.SessionDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseSessionDurationSeconds).Within(0.001f));
+            yield return null;
+        }
+
+        /// <summary>
+        /// 기존 브랜치가 3탭 래퍼 아래로 매핑되고 상하차 오픈 노드가 센터 탭에 배치되는지 검증합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BranchesKeepIdsWhileTabsWrapTheCatalog()
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+
+            Assert.That(catalog.TryGetTabDefinition(SkillTreeTabId.Center, out var centerTab), Is.True);
+            Assert.That(catalog.TryGetTabDefinition(SkillTreeTabId.Human, out var humanTab), Is.True);
+            Assert.That(catalog.TryGetTabDefinition(SkillTreeTabId.Robot, out var robotTab), Is.True);
+            Assert.That(centerTab.displayName, Is.EqualTo("물류 센터 성능"));
+            Assert.That(humanTab.displayName, Is.EqualTo("사람 성능"));
+            Assert.That(robotTab.displayName, Is.EqualTo("로봇 성능"));
+
+            Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.Management, out var managementBranch), Is.True);
+            Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.Automation, out var automationBranch), Is.True);
+            Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.Vitality, out var vitalityBranch), Is.True);
+            Assert.That(managementBranch.tabId, Is.EqualTo(SkillTreeTabId.Center));
+            Assert.That(automationBranch.tabId, Is.EqualTo(SkillTreeTabId.Robot));
+            Assert.That(vitalityBranch.tabId, Is.EqualTo(SkillTreeTabId.Human));
+
+            Assert.That(catalog.TryGetNodeDefinition(MetaProgressionCatalogAsset.LoadingDockUnlockNodeId, out var loadingDockNode), Is.True);
+            Assert.That(loadingDockNode.branchId, Is.EqualTo(SkillBranchId.Management));
+            Assert.That(loadingDockNode.prerequisiteNodeIds, Does.Contain("management.performance_contract"));
+
+            var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
+            for (var level = 0; level < 5; level += 1)
+            {
+                Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "management.performance_contract"), Is.True);
+            }
+
+            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId), Is.True);
+            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
+            var status = MetaProgressionCalculator.DescribeNode(snapshot, catalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId);
+
+            Assert.That(resolved.HasLoadingDockAccess, Is.True);
+            Assert.That(status.tabId, Is.EqualTo(SkillTreeTabId.Center));
+            Assert.That(status.tabDisplayName, Is.EqualTo("물류 센터 성능"));
             yield return null;
         }
 

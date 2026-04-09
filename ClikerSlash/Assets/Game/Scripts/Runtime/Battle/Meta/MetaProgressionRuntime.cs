@@ -23,6 +23,7 @@ namespace ClikerSlash.Battle
         public float ReturnBeltChance;
         public bool HasWeightPreview;
         public bool HasAssistArm;
+        public bool HasLoadingDockAccess;
     }
 
     /// <summary>
@@ -41,6 +42,8 @@ namespace ClikerSlash.Battle
     {
         public string nodeId;
         public string displayName;
+        public string tabDisplayName;
+        public SkillTreeTabId tabId;
         public string branchDisplayName;
         public SkillBranchId branchId;
         public int tier;
@@ -119,7 +122,8 @@ namespace ClikerSlash.Battle
                 PreviewCargoCount = 0,
                 ReturnBeltChance = 0f,
                 HasWeightPreview = ContainsFlag(snapshot.selectedAutomationFlags, MetaProgressionCatalogAsset.WeightPreviewFlag),
-                HasAssistArm = ContainsFlag(snapshot.selectedAutomationFlags, MetaProgressionCatalogAsset.AssistArmFlag)
+                HasAssistArm = ContainsFlag(snapshot.selectedAutomationFlags, MetaProgressionCatalogAsset.AssistArmFlag),
+                HasLoadingDockAccess = false
             };
 
             foreach (var unlockedState in snapshot.unlockedNodeStates)
@@ -328,6 +332,13 @@ namespace ClikerSlash.Battle
                             resolved.HasAssistArm = true;
                         }
                         break;
+
+                    case SkillEffectType.CenterUnlockFlag:
+                        if (string.Equals(effect.targetKey, MetaProgressionCatalogAsset.LoadingDockUnlockFlag, StringComparison.Ordinal))
+                        {
+                            resolved.HasLoadingDockAccess = true;
+                        }
+                        break;
                 }
             }
         }
@@ -380,6 +391,8 @@ namespace ClikerSlash.Battle
                 displayName = string.IsNullOrWhiteSpace(nodeDefinition.displayName)
                     ? nodeDefinition.nodeId
                     : nodeDefinition.displayName,
+                tabId = ResolveTabId(catalog, nodeDefinition.branchId),
+                tabDisplayName = ResolveTabDisplayName(catalog, nodeDefinition.branchId),
                 branchId = nodeDefinition.branchId,
                 branchDisplayName = ResolveBranchDisplayName(catalog, nodeDefinition.branchId),
                 tier = math.max(1, nodeDefinition.tier),
@@ -471,6 +484,35 @@ namespace ClikerSlash.Battle
             }
 
             return branchId.ToString();
+        }
+
+        /// <summary>
+        /// 브랜치 매핑이 비어 있으면 사람 탭으로 폴백해 기존 표시를 깨지 않게 유지합니다.
+        /// </summary>
+        private static SkillTreeTabId ResolveTabId(MetaProgressionCatalogAsset catalog, SkillBranchId branchId)
+        {
+            if (catalog.TryGetBranchDefinition(branchId, out var branchDefinition) && branchDefinition != null)
+            {
+                return branchDefinition.tabId;
+            }
+
+            return SkillTreeTabId.Human;
+        }
+
+        /// <summary>
+        /// 상위 탭 이름을 읽어 허브가 탭-브랜치 관계를 함께 표시할 수 있게 합니다.
+        /// </summary>
+        private static string ResolveTabDisplayName(MetaProgressionCatalogAsset catalog, SkillBranchId branchId)
+        {
+            var tabId = ResolveTabId(catalog, branchId);
+            if (catalog.TryGetTabDefinition(tabId, out var tabDefinition) &&
+                tabDefinition != null &&
+                !string.IsNullOrWhiteSpace(tabDefinition.displayName))
+            {
+                return tabDefinition.displayName;
+            }
+
+            return tabId.ToString();
         }
 
         private static bool ContainsFlag(List<string> flags, string targetFlag)

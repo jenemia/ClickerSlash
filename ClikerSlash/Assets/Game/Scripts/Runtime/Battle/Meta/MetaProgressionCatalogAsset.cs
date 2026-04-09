@@ -18,6 +18,16 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
+    /// 메타 허브에서 브랜치를 묶어 보여주는 상위 탭 식별자입니다.
+    /// </summary>
+    public enum SkillTreeTabId
+    {
+        Center = 0,
+        Human = 1,
+        Robot = 2
+    }
+
+    /// <summary>
     /// 개별 스킬 노드가 런타임 집계에 주는 효과 종류입니다.
     /// </summary>
     public enum SkillEffectType
@@ -31,7 +41,8 @@ namespace ClikerSlash.Battle
         UnlockedLaneCountOverride = 6,
         PreviewCargoCountAdd = 7,
         ReturnBeltChanceAdd = 8,
-        AutomationUnlockFlag = 9
+        AutomationUnlockFlag = 9,
+        CenterUnlockFlag = 10
     }
 
     /// <summary>
@@ -164,11 +175,23 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
+    /// 스킬 트리 상위 탭 표시 메타데이터입니다.
+    /// </summary>
+    [Serializable]
+    public sealed class SkillTreeTabDefinition
+    {
+        public SkillTreeTabId tabId;
+        public string displayName;
+        public int sortOrder;
+    }
+
+    /// <summary>
     /// 스킬 트리 브랜치 표시 메타데이터입니다.
     /// </summary>
     [Serializable]
     public sealed class SkillBranchDefinition
     {
+        public SkillTreeTabId tabId;
         public SkillBranchId branchId;
         public string displayName;
         public int sortOrder;
@@ -235,17 +258,20 @@ namespace ClikerSlash.Battle
         menuName = "ClikerSlash/Meta/Meta Progression Catalog")]
     public sealed class MetaProgressionCatalogAsset : ScriptableObject
     {
-        public const int DefaultSchemaVersion = 2;
+        public const int DefaultSchemaVersion = 3;
         public const string DefaultResourcePath = "MetaProgression/DefaultMetaProgressionCatalog";
         public const string StarterVitalityNodeId = "vitality.basic_stamina_training";
         public const string LaneExpansionNodeIdTier1 = "management.lane_expansion_i";
         public const string LaneExpansionNodeIdTier2 = "management.lane_expansion_ii";
         public const string LaneExpansionNodeIdTier3 = "management.lane_expansion_iii";
+        public const string LoadingDockUnlockNodeId = "management.loading_dock_unlock";
         public const string WeightPreviewFlag = "automation.weight_preview";
         public const string AssistArmFlag = "automation.assist_arm";
+        public const string LoadingDockUnlockFlag = "center.loading_dock_access";
 
         [Min(1)] public int schemaVersion = DefaultSchemaVersion;
         public WorkerBaseStatsDefinition workerBaseStats = WorkerBaseStatsDefinition.CreateDefault();
+        public List<SkillTreeTabDefinition> skillTabs = new List<SkillTreeTabDefinition>();
         public List<SkillBranchDefinition> skillBranches = new List<SkillBranchDefinition>();
         public List<SkillNodeDefinition> skillNodes = new List<SkillNodeDefinition>();
         public StartingProgressionDefinition startingProgression = StartingProgressionDefinition.CreateDefault();
@@ -315,15 +341,40 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
+        /// 탭 식별자로 표시용 메타데이터를 검색합니다.
+        /// </summary>
+        public bool TryGetTabDefinition(SkillTreeTabId tabId, out SkillTreeTabDefinition tabDefinition)
+        {
+            EnsureDefaults();
+            foreach (var tab in skillTabs)
+            {
+                if (tab != null && tab.tabId == tabId)
+                {
+                    tabDefinition = tab;
+                    return true;
+                }
+            }
+
+            tabDefinition = null;
+            return false;
+        }
+
+        /// <summary>
         /// 비어 있는 필드를 기획 기준 기본 묶음으로 채웁니다.
         /// </summary>
         public void EnsureDefaults()
         {
             schemaVersion = Mathf.Max(DefaultSchemaVersion, schemaVersion);
             workerBaseStats ??= WorkerBaseStatsDefinition.CreateDefault();
+            skillTabs ??= CreateDefaultTabs();
             skillBranches ??= CreateDefaultBranches();
             skillNodes ??= CreateDefaultNodes();
             startingProgression ??= StartingProgressionDefinition.CreateDefault();
+
+            if (skillTabs.Count == 0)
+            {
+                skillTabs = CreateDefaultTabs();
+            }
 
             if (skillBranches.Count == 0)
             {
@@ -344,21 +395,32 @@ namespace ClikerSlash.Battle
         {
             schemaVersion = DefaultSchemaVersion;
             workerBaseStats = WorkerBaseStatsDefinition.CreateDefault();
+            skillTabs = CreateDefaultTabs();
             skillBranches = CreateDefaultBranches();
             skillNodes = CreateDefaultNodes();
             startingProgression = StartingProgressionDefinition.CreateDefault();
+        }
+
+        private static List<SkillTreeTabDefinition> CreateDefaultTabs()
+        {
+            return new List<SkillTreeTabDefinition>
+            {
+                new SkillTreeTabDefinition { tabId = SkillTreeTabId.Center, displayName = "물류 센터 성능", sortOrder = 0 },
+                new SkillTreeTabDefinition { tabId = SkillTreeTabId.Human, displayName = "사람 성능", sortOrder = 1 },
+                new SkillTreeTabDefinition { tabId = SkillTreeTabId.Robot, displayName = "로봇 성능", sortOrder = 2 }
+            };
         }
 
         private static List<SkillBranchDefinition> CreateDefaultBranches()
         {
             return new List<SkillBranchDefinition>
             {
-                new SkillBranchDefinition { branchId = SkillBranchId.Vitality, displayName = "체력", sortOrder = 0 },
-                new SkillBranchDefinition { branchId = SkillBranchId.Strength, displayName = "근력", sortOrder = 1 },
-                new SkillBranchDefinition { branchId = SkillBranchId.Mobility, displayName = "이동", sortOrder = 2 },
-                new SkillBranchDefinition { branchId = SkillBranchId.Mastery, displayName = "숙련", sortOrder = 3 },
-                new SkillBranchDefinition { branchId = SkillBranchId.Management, displayName = "경영", sortOrder = 4 },
-                new SkillBranchDefinition { branchId = SkillBranchId.Automation, displayName = "자동화", sortOrder = 5 }
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Human, branchId = SkillBranchId.Vitality, displayName = "체력", sortOrder = 0 },
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Human, branchId = SkillBranchId.Strength, displayName = "근력", sortOrder = 1 },
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Human, branchId = SkillBranchId.Mobility, displayName = "이동", sortOrder = 2 },
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Human, branchId = SkillBranchId.Mastery, displayName = "숙련", sortOrder = 3 },
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Center, branchId = SkillBranchId.Management, displayName = "경영", sortOrder = 4 },
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Robot, branchId = SkillBranchId.Automation, displayName = "자동화", sortOrder = 5 }
             };
         }
 
@@ -420,6 +482,15 @@ namespace ClikerSlash.Battle
                     2,
                     new List<string> { "management.performance_contract" },
                     OverrideIntEffect(SkillEffectType.UnlockedLaneCountOverride, 3)),
+                CreateNode(
+                    LoadingDockUnlockNodeId,
+                    SkillBranchId.Management,
+                    "상하차 오픈",
+                    2,
+                    1,
+                    2,
+                    new List<string> { "management.performance_contract" },
+                    UnlockCenterFlagEffect(LoadingDockUnlockFlag)),
                 CreateNode(
                     LaneExpansionNodeIdTier2,
                     SkillBranchId.Management,
@@ -540,6 +611,16 @@ namespace ClikerSlash.Battle
             return new SkillEffectDefinition
             {
                 effectType = SkillEffectType.AutomationUnlockFlag,
+                operation = SkillEffectOperation.Unlock,
+                targetKey = targetKey
+            };
+        }
+
+        private static SkillEffectDefinition UnlockCenterFlagEffect(string targetKey)
+        {
+            return new SkillEffectDefinition
+            {
+                effectType = SkillEffectType.CenterUnlockFlag,
                 operation = SkillEffectOperation.Unlock,
                 targetKey = targetKey
             };

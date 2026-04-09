@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ddf9796b3bc4a1996d0df5220b55510, type: 3}
   m_Name: DefaultMetaProgressionCatalog
   m_EditorClassIdentifier: 
-  schemaVersion: 2
+  schemaVersion: 3
   workerBaseStats:
     baseSessionDurationSeconds: 20
     baseMaxHandleWeight: 10
@@ -21,23 +21,39 @@ MonoBehaviour:
     baseRewardMultiplier: 1
     basePenaltyMultiplier: 1
     startingUnlockedLaneCount: 3
+  skillTabs:
+  - tabId: 0
+    displayName: "\uBB3C\uB958 \uC13C\uD130 \uC131\uB2A5"
+    sortOrder: 0
+  - tabId: 1
+    displayName: "\uC0AC\uB78C \uC131\uB2A5"
+    sortOrder: 1
+  - tabId: 2
+    displayName: "\uB85C\uBD07 \uC131\uB2A5"
+    sortOrder: 2
   skillBranches:
-  - branchId: 0
+  - tabId: 1
+    branchId: 0
     displayName: "\uCCB4\uB825"
     sortOrder: 0
-  - branchId: 1
+  - tabId: 1
+    branchId: 1
     displayName: "\uADFC\uB825"
     sortOrder: 1
-  - branchId: 2
+  - tabId: 1
+    branchId: 2
     displayName: "\uC774\uB3D9"
     sortOrder: 2
-  - branchId: 3
+  - tabId: 1
+    branchId: 3
     displayName: "\uC219\uB828"
     sortOrder: 3
-  - branchId: 4
+  - tabId: 0
+    branchId: 4
     displayName: "\uACBD\uC601"
     sortOrder: 4
-  - branchId: 5
+  - tabId: 2
+    branchId: 5
     displayName: "\uC790\uB3D9\uD654"
     sortOrder: 5
   skillNodes:
@@ -120,6 +136,20 @@ MonoBehaviour:
       intValue: 3
       floatValue: 3
       targetKey: 
+  - nodeId: management.loading_dock_unlock
+    branchId: 4
+    displayName: "\uC0C1\uD558\uCC28 \uC624\uD508"
+    tier: 2
+    maxLevel: 1
+    cost: 2
+    prerequisiteNodeIds:
+    - management.performance_contract
+    effects:
+    - effectType: 10
+      operation: 3
+      intValue: 0
+      floatValue: 0
+      targetKey: center.loading_dock_access
   - nodeId: management.lane_expansion_ii
     branchId: 4
     displayName: "\uB77C\uC778 \uC99D\uC124 II"
