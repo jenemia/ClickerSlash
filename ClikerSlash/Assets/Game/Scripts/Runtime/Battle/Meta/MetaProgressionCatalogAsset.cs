@@ -271,6 +271,25 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
+        /// 브랜치 식별자로 표시용 메타데이터를 검색합니다.
+        /// </summary>
+        public bool TryGetBranchDefinition(SkillBranchId branchId, out SkillBranchDefinition branchDefinition)
+        {
+            EnsureDefaults();
+            foreach (var branch in skillBranches)
+            {
+                if (branch != null && branch.branchId == branchId)
+                {
+                    branchDefinition = branch;
+                    return true;
+                }
+            }
+
+            branchDefinition = null;
+            return false;
+        }
+
+        /// <summary>
         /// 비어 있는 필드를 기획 기준 기본 묶음으로 채웁니다.
         /// </summary>
         public void EnsureDefaults()
@@ -374,7 +393,7 @@ namespace ClikerSlash.Battle
                     2,
                     1,
                     2,
-                    new List<string>(),
+                    new List<string> { "management.performance_contract" },
                     OverrideIntEffect(SkillEffectType.UnlockedLaneCountOverride, 3)),
                 CreateNode(
                     LaneExpansionNodeIdTier2,
@@ -410,7 +429,7 @@ namespace ClikerSlash.Battle
                     2,
                     3,
                     2,
-                    new List<string>(),
+                    new List<string> { "automation.weight_scanner" },
                     AddFloatEffect(SkillEffectType.ReturnBeltChanceAdd, 0.15f)),
                 CreateNode(
                     "automation.assist_arm",
@@ -419,7 +438,7 @@ namespace ClikerSlash.Battle
                     3,
                     1,
                     3,
-                    new List<string> { "automation.weight_scanner" },
+                    new List<string> { "automation.return_belt" },
                     UnlockFlagEffect(AssistArmFlag))
             };
         }

@@ -21,10 +21,10 @@ namespace ClikerSlash.Tests.PlayMode
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
             var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
 
-            Assert.That(resolved.ActiveLaneCount, Is.EqualTo(2));
-            Assert.That(resolved.MaxHandleWeight, Is.EqualTo(10));
-            Assert.That(resolved.LaneMoveDurationSeconds, Is.EqualTo(0.18f).Within(0.001f));
-            Assert.That(resolved.SessionDurationSeconds, Is.EqualTo(PrototypeSessionRuntime.DefaultBaseWorkDurationSeconds).Within(0.001f));
+            Assert.That(resolved.ActiveLaneCount, Is.EqualTo(catalog.workerBaseStats.startingUnlockedLaneCount));
+            Assert.That(resolved.MaxHandleWeight, Is.EqualTo(catalog.workerBaseStats.baseMaxHandleWeight));
+            Assert.That(resolved.LaneMoveDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseLaneMoveDurationSeconds).Within(0.001f));
+            Assert.That(resolved.SessionDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseSessionDurationSeconds).Within(0.001f));
             yield return null;
         }
 
@@ -36,6 +36,10 @@ namespace ClikerSlash.Tests.PlayMode
         {
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
+            for (var level = 0; level < 5; level += 1)
+            {
+                Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "management.performance_contract"), Is.True);
+            }
 
             Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LaneExpansionNodeIdTier1), Is.True);
             Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 5).ActiveLaneCount, Is.EqualTo(3));
@@ -67,6 +71,63 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(roundTrip.unlockedNodeStates.Count, Is.EqualTo(snapshot.unlockedNodeStates.Count));
             Assert.That(roundTrip.unlockedNodeStates[0].nodeId, Is.EqualTo(snapshot.unlockedNodeStates[0].nodeId));
             Assert.That(roundTrip.unlockedNodeStates[0].level, Is.EqualTo(snapshot.unlockedNodeStates[0].level));
+            yield return null;
+        }
+
+        /// <summary>
+        /// 다음 노드는 이전 노드가 최대 레벨에 도달하기 전까지 잠겨 있어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ChildNodesRequireParentMaxLevelBeforeUpgrade()
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
+
+            Assert.That(
+                MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LaneExpansionNodeIdTier1),
+                Is.False);
+
+            for (var level = 0; level < 5; level += 1)
+            {
+                Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "management.performance_contract"), Is.True);
+            }
+
+            Assert.That(
+                MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LaneExpansionNodeIdTier1),
+                Is.True);
+            Assert.That(
+                MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "automation.return_belt"),
+                Is.False);
+
+            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "automation.weight_scanner"), Is.True);
+            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "automation.return_belt"), Is.True);
+            yield return null;
+        }
+
+        /// <summary>
+        /// 허브 레이아웃 빌더가 카탈로그의 모든 브랜치와 노드를 안정적으로 배치하는지 검증합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator SkillTreeLayoutBuildsBranchesAndNodePositions()
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            var layout = PrototypeHubSkillTreeLayoutBuilder.Build(catalog);
+
+            Assert.That(layout.branches.Count, Is.EqualTo(catalog.skillBranches.Count));
+
+            var totalNodeCount = 0;
+            foreach (var branch in layout.branches)
+            {
+                totalNodeCount += branch.nodes.Count;
+                foreach (var node in branch.nodes)
+                {
+                    Assert.That(node.localPosition.x, Is.GreaterThan(0f));
+                }
+            }
+
+            Assert.That(totalNodeCount, Is.EqualTo(catalog.skillNodes.Count));
+            Assert.That(layout.contentSize.x, Is.GreaterThan(0f));
+            Assert.That(layout.contentSize.y, Is.GreaterThan(0f));
             yield return null;
         }
     }

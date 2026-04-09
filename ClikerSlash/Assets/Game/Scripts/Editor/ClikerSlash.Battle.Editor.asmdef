@@ -4,7 +4,9 @@
   "references": [
     "ClikerSlash.Battle.Runtime",
     "Unity.Entities",
-    "Unity.Collections"
+    "Unity.Collections",
+    "Unity.InputSystem",
+    "Unity.TextMeshPro"
   ],
   "includePlatforms": [
     "Editor"

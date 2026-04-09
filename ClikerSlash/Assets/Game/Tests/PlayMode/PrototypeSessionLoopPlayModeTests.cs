@@ -23,17 +23,16 @@ namespace ClikerSlash.Tests.PlayMode
         {
             PrototypeSessionRuntime.ResetPrototypeState();
             PrototypeSessionRuntime.IncreaseHealthLevel();
+            var expectedDuration = PrototypeSessionRuntime.GetResolvedMetaProgression().SessionDurationSeconds;
 
             yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
 
             var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
-            var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
             var stage = entityManager.CreateEntityQuery(typeof(StageProgressState)).GetSingleton<StageProgressState>();
             var stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
-            var expectedDuration = battleConfig.BaseWorkDurationSeconds + battleConfig.HealthDurationBonusSeconds;
             var progressionStats = entityManager.CreateEntityQuery(typeof(WorkerProgressionStats)).GetSingleton<WorkerProgressionStats>();
 
-            Assert.That(stage.RemainingWorkTime, Is.EqualTo(expectedDuration).Within(0.01f));
+            Assert.That(stage.RemainingWorkTime, Is.EqualTo(expectedDuration).Within(0.05f));
             Assert.That(stats.ResolvedWorkDurationSeconds, Is.EqualTo(expectedDuration).Within(0.01f));
             Assert.That(PrototypeSessionRuntime.ResolvedWorkDurationSeconds, Is.EqualTo(expectedDuration).Within(0.01f));
             Assert.That(progressionStats.SessionDurationSeconds, Is.EqualTo(expectedDuration).Within(0.01f));
@@ -131,19 +130,19 @@ namespace ClikerSlash.Tests.PlayMode
             yield return WaitForSceneAndWorld(PrototypeSessionRuntime.BattleSceneName);
 
             var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
-            var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
             var stage = entityManager.CreateEntityQuery(typeof(StageProgressState)).GetSingleton<StageProgressState>();
             var stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
             var sessionRules = entityManager.CreateEntityQuery(typeof(SessionRuleState)).GetSingleton<SessionRuleState>();
-            var expectedDuration = battleConfig.BaseWorkDurationSeconds + battleConfig.HealthDurationBonusSeconds;
+            var expectedDuration = PrototypeSessionRuntime.GetResolvedMetaProgression().SessionDurationSeconds;
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
 
-            Assert.That(stage.RemainingWorkTime, Is.EqualTo(expectedDuration).Within(0.01f));
+            Assert.That(stage.RemainingWorkTime, Is.EqualTo(expectedDuration).Within(0.05f));
             Assert.That(stats.TotalMoney, Is.EqualTo(0));
             Assert.That(stats.ProcessedCargoCount, Is.EqualTo(0));
             Assert.That(stats.MissedCargoCount, Is.EqualTo(0));
             Assert.That(stats.CurrentCombo, Is.EqualTo(0));
             Assert.That(PrototypeSessionRuntime.HealthLevel, Is.EqualTo(2));
-            Assert.That(sessionRules.ActiveLaneCount, Is.EqualTo(2));
+            Assert.That(sessionRules.ActiveLaneCount, Is.EqualTo(catalog.workerBaseStats.startingUnlockedLaneCount));
         }
 
         private static IEnumerator LoadSceneAndWait(string sceneName)

@@ -1,8 +1,11 @@
 using System.Collections.Generic;
 using ClikerSlash.Battle;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -21,7 +24,6 @@ namespace ClikerSlash.Editor
         private const string CargoMaterialPath = "Assets/Game/Materials/CargoCube.mat";
         private const string LaneMaterialPath = "Assets/Game/Materials/LaneStrip.mat";
         private const string AccentMaterialPath = "Assets/Game/Materials/LineAccent.mat";
-
         [MenuItem("Tools/ClikerSlash/Build Prototype Battle Scene")]
         public static void BuildPrototypeBattleScene()
         {
@@ -216,7 +218,8 @@ namespace ClikerSlash.Editor
             scaler.matchWidthOrHeight = 0.5f;
 
             var presenter = hudRoot.AddComponent<BattleHudPresenter>();
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf") ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf") ??
+                       Resources.GetBuiltinResource<Font>("Arial.ttf");
 
             var infoText = CreateHudText("InfoText", hudRoot.transform, font, 28, TextAnchor.UpperLeft);
             SetRect(infoText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -26f), new Vector2(360f, 160f));
@@ -269,12 +272,140 @@ namespace ClikerSlash.Editor
             scene.name = PrototypeSessionRuntime.HubSceneName;
 
             CreateCamera();
-            CreateLight();
+            var uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
 
             var hubRoot = new GameObject("PrototypeHubRoot");
-            hubRoot.AddComponent<PrototypeHubPresenter>();
+            var presenter = hubRoot.AddComponent<PrototypeHubPresenter>();
+
+            var canvasRoot = new GameObject("PrototypeHubCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            var canvas = canvasRoot.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            var scaler = canvasRoot.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            var background = CreatePanel("Background", canvasRoot.transform, uiSprite, new Color(0.05f, 0.07f, 0.09f, 1f));
+            SetRect(background.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            var viewport = CreatePanel("TreeViewport", canvasRoot.transform, uiSprite, new Color(0.08f, 0.11f, 0.10f, 0.92f));
+            viewport.AddComponent<RectMask2D>();
+            var viewportRect = viewport.GetComponent<RectTransform>();
+            SetRect(viewportRect, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            var treeContent = new GameObject("TreeContent", typeof(RectTransform));
+            treeContent.transform.SetParent(viewport.transform, false);
+            var treeContentRect = treeContent.GetComponent<RectTransform>();
+            treeContentRect.anchorMin = new Vector2(0.5f, 0.5f);
+            treeContentRect.anchorMax = new Vector2(0.5f, 0.5f);
+            treeContentRect.pivot = new Vector2(0.5f, 0.5f);
+            treeContentRect.anchoredPosition = Vector2.zero;
+            treeContentRect.sizeDelta = new Vector2(3200f, 2200f);
+
+            var panZoomController = viewport.AddComponent<PrototypeHubPanZoomController>();
+            var treeView = viewport.AddComponent<PrototypeHubSkillTreeView>();
+            treeView.Bind(viewportRect, treeContentRect, panZoomController);
+
+            var overviewPanel = CreatePanel("OverviewPanel", canvasRoot.transform, uiSprite, new Color(0.11f, 0.14f, 0.15f, 0.9f));
+            SetRect(overviewPanel.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -28f), new Vector2(360f, 268f));
+            var title = CreateWrapHudText("TitleLabel", overviewPanel.transform, 34, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -18f), new Vector2(-44f, 42f));
+            title.fontStyle = FontStyles.Bold;
+
+            var health = CreateWrapHudText("HealthLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(health.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -74f), new Vector2(-44f, 34f));
+            var duration = CreateWrapHudText("DurationLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(duration.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -110f), new Vector2(-44f, 34f));
+            var weight = CreateWrapHudText("WeightLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(weight.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -146f), new Vector2(-44f, 34f));
+            var lane = CreateWrapHudText("LaneLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(lane.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -182f), new Vector2(-44f, 34f));
+            var controls = CreateWrapHudText("ControlsLabel", overviewPanel.transform, 20, TextAlignmentOptions.TopLeft, new Color(0.79f, 0.88f, 0.83f));
+            SetRect(controls.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(22f, 18f), new Vector2(-44f, 42f));
+
+            var selectionPanel = CreatePanel("SelectionPanel", canvasRoot.transform, uiSprite, new Color(0.11f, 0.13f, 0.14f, 0.92f));
+            SetRect(selectionPanel.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(28f, 28f), new Vector2(360f, 294f));
+            var selectionTitle = CreateWrapHudText("SelectionTitleLabel", selectionPanel.transform, 28, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(selectionTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -20f), new Vector2(-44f, 38f));
+            selectionTitle.fontStyle = FontStyles.Bold;
+            var selectionBody = CreateWrapHudText("SelectionBodyLabel", selectionPanel.transform, 20, TextAlignmentOptions.TopLeft, new Color(0.86f, 0.92f, 0.86f));
+            SetRect(selectionBody.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(22f, 20f), new Vector2(-44f, -70f));
+
+            var resultPanel = CreatePanel("ResultPanel", canvasRoot.transform, uiSprite, new Color(0.13f, 0.13f, 0.11f, 0.92f));
+            SetRect(resultPanel.GetComponent<RectTransform>(), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-28f, -28f), new Vector2(320f, 236f));
+            var result = CreateWrapHudText("ResultLabel", resultPanel.transform, 22, TextAlignmentOptions.TopLeft, new Color(0.98f, 0.90f, 0.68f));
+            SetRect(result.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(22f, 20f), new Vector2(-44f, -40f));
+
+            var startButton = CreateButton("StartButton", canvasRoot.transform, uiSprite, "Start Prototype Shift");
+            SetRect(startButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-28f, 28f), new Vector2(320f, 68f));
+
+            var eventSystemObject = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+            eventSystemObject.transform.SetSiblingIndex(canvasRoot.transform.GetSiblingIndex() + 1);
+
+            presenter.Bind(
+                treeView,
+                title,
+                health,
+                duration,
+                weight,
+                lane,
+                controls,
+                result,
+                selectionTitle,
+                selectionBody,
+                startButton.GetComponent<Button>());
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), HubScenePath);
+        }
+
+        private static GameObject CreatePanel(string name, Transform parent, Sprite sprite, Color color)
+        {
+            var panel = new GameObject(name, typeof(RectTransform), typeof(WrapImage));
+            panel.transform.SetParent(parent, false);
+            var image = panel.GetComponent<WrapImage>();
+            image.sprite = sprite;
+            image.type = sprite != null ? Image.Type.Sliced : Image.Type.Simple;
+            image.color = color;
+            return panel;
+        }
+
+        private static WrapLabel CreateWrapHudText(
+            string name,
+            Transform parent,
+            int fontSize,
+            TextAlignmentOptions alignment,
+            Color color)
+        {
+            var labelObject = new GameObject(name, typeof(RectTransform), typeof(WrapLabel));
+            labelObject.transform.SetParent(parent, false);
+            var text = labelObject.GetComponent<WrapLabel>();
+            text.fontSize = fontSize;
+            text.alignment = alignment;
+            text.color = color;
+            text.textWrappingMode = TextWrappingModes.Normal;
+            text.overflowMode = TextOverflowModes.Overflow;
+            text.richText = false;
+            return labelObject.GetComponent<WrapLabel>();
+        }
+
+        private static GameObject CreateButton(
+            string name,
+            Transform parent,
+            Sprite sprite,
+            string labelText)
+        {
+            var buttonObject = new GameObject(name, typeof(RectTransform), typeof(WrapImage), typeof(Button));
+            buttonObject.transform.SetParent(parent, false);
+            var image = buttonObject.GetComponent<WrapImage>();
+            image.sprite = sprite;
+            image.type = sprite != null ? Image.Type.Sliced : Image.Type.Simple;
+            image.color = new Color(0.24f, 0.46f, 0.31f, 0.98f);
+
+            var label = CreateWrapHudText("Label", buttonObject.transform, 24, TextAlignmentOptions.Center, Color.white);
+            SetRect(label.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            label.text = labelText;
+            label.fontStyle = FontStyles.Bold;
+            return buttonObject;
         }
 
         private static Material GetOrCreateMaterial(string assetPath, Color color)

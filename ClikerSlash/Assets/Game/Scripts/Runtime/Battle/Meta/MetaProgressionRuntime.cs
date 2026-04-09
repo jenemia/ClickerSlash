@@ -35,6 +35,33 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
+    /// 허브 UI가 노드 상태를 표시할 때 사용하는 읽기 전용 스냅샷입니다.
+    /// </summary>
+    public sealed class MetaProgressionNodeStatus
+    {
+        public string nodeId;
+        public string displayName;
+        public string branchDisplayName;
+        public SkillBranchId branchId;
+        public int tier;
+        public int cost;
+        public int currentLevel;
+        public int maxLevel;
+        // true면 현재 레벨이 1 이상이라 이미 일부라도 해금된 상태입니다.
+        public bool isUnlocked;
+        // true면 선행 max 조건을 모두 만족하지 못해 아직 진입할 수 없습니다.
+        public bool isLocked;
+        // true면 추가 레벨을 올릴 수 있는 상태입니다.
+        public bool canUpgrade;
+        // true면 최대 레벨에 도달해 더 이상 클릭 업그레이드가 일어나지 않습니다.
+        public bool isMaxed;
+        public List<string> prerequisiteNodeIds = new List<string>();
+        public List<string> unmetPrerequisiteNodeIds = new List<string>();
+        public List<string> unmetPrerequisiteNames = new List<string>();
+        public string prerequisiteSummary;
+    }
+
+    /// <summary>
     /// 카탈로그와 해금 상태를 합쳐 현재 세션용 메타 효과를 계산합니다.
     /// </summary>
     public static class MetaProgressionCalculator
@@ -144,7 +171,7 @@ namespace ClikerSlash.Battle
                 return false;
             }
 
-            if (!PrerequisitesSatisfied(snapshot, nodeDefinition))
+            if (!PrerequisitesSatisfied(snapshot, catalog, nodeDefinition))
             {
                 return false;
             }
@@ -186,6 +213,51 @@ namespace ClikerSlash.Battle
 
             var unlockedState = FindUnlockedState(snapshot.unlockedNodeStates, nodeId);
             return unlockedState != null && unlockedState.isUnlocked ? math.max(0, unlockedState.level) : 0;
+        }
+
+        /// <summary>
+        /// 단일 노드의 현재 레벨, 잠금 상태, 선행 max 조건 충족 여부를 계산합니다.
+        /// </summary>
+        public static MetaProgressionNodeStatus DescribeNode(
+            PlayerMetaProgressionSnapshot snapshot,
+            MetaProgressionCatalogAsset catalog,
+            string nodeId)
+        {
+            catalog = catalog != null ? catalog : MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            snapshot ??= CreateDefaultSnapshot(catalog);
+            snapshot.unlockedNodeStates ??= new List<UnlockedSkillNodeState>();
+
+            if (!catalog.TryGetNodeDefinition(nodeId, out var nodeDefinition) || nodeDefinition == null)
+            {
+                return null;
+            }
+
+            return DescribeNode(snapshot, catalog, nodeDefinition);
+        }
+
+        /// <summary>
+        /// 카탈로그의 모든 노드를 UI 친화적인 상태 묶음으로 변환합니다.
+        /// </summary>
+        public static List<MetaProgressionNodeStatus> DescribeAllNodes(
+            PlayerMetaProgressionSnapshot snapshot,
+            MetaProgressionCatalogAsset catalog)
+        {
+            catalog = catalog != null ? catalog : MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            snapshot ??= CreateDefaultSnapshot(catalog);
+            catalog.EnsureDefaults();
+
+            var statuses = new List<MetaProgressionNodeStatus>(catalog.skillNodes.Count);
+            foreach (var nodeDefinition in catalog.skillNodes)
+            {
+                if (nodeDefinition == null)
+                {
+                    continue;
+                }
+
+                statuses.Add(DescribeNode(snapshot, catalog, nodeDefinition));
+            }
+
+            return statuses;
         }
 
         private static void ApplyNodeEffects(SkillNodeDefinition nodeDefinition, ref ResolvedMetaProgression resolved)
@@ -254,7 +326,13 @@ namespace ClikerSlash.Battle
             }
         }
 
-        private static bool PrerequisitesSatisfied(PlayerMetaProgressionSnapshot snapshot, SkillNodeDefinition nodeDefinition)
+        /// <summary>
+        /// 선행 노드가 모두 최대 레벨까지 올라가야 다음 노드가 열리도록 확인합니다.
+        /// </summary>
+        private static bool PrerequisitesSatisfied(
+            PlayerMetaProgressionSnapshot snapshot,
+            MetaProgressionCatalogAsset catalog,
+            SkillNodeDefinition nodeDefinition)
         {
             if (nodeDefinition.prerequisiteNodeIds == null || nodeDefinition.prerequisiteNodeIds.Count == 0)
             {
@@ -263,13 +341,108 @@ namespace ClikerSlash.Battle
 
             foreach (var prerequisiteNodeId in nodeDefinition.prerequisiteNodeIds)
             {
-                if (GetNodeLevel(snapshot, prerequisiteNodeId) <= 0)
+                if (!catalog.TryGetNodeDefinition(prerequisiteNodeId, out var prerequisiteDefinition) ||
+                    prerequisiteDefinition == null)
+                {
+                    return false;
+                }
+
+                if (GetNodeLevel(snapshot, prerequisiteNodeId) < math.max(1, prerequisiteDefinition.maxLevel))
                 {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// 내부 정의를 기준으로 노드 상태 DTO를 조립합니다.
+        /// </summary>
+        private static MetaProgressionNodeStatus DescribeNode(
+            PlayerMetaProgressionSnapshot snapshot,
+            MetaProgressionCatalogAsset catalog,
+            SkillNodeDefinition nodeDefinition)
+        {
+            var currentLevel = GetNodeLevel(snapshot, nodeDefinition.nodeId);
+            var maxLevel = math.max(1, nodeDefinition.maxLevel);
+            var status = new MetaProgressionNodeStatus
+            {
+                nodeId = nodeDefinition.nodeId,
+                displayName = string.IsNullOrWhiteSpace(nodeDefinition.displayName)
+                    ? nodeDefinition.nodeId
+                    : nodeDefinition.displayName,
+                branchId = nodeDefinition.branchId,
+                branchDisplayName = ResolveBranchDisplayName(catalog, nodeDefinition.branchId),
+                tier = math.max(1, nodeDefinition.tier),
+                cost = math.max(0, nodeDefinition.cost),
+                currentLevel = currentLevel,
+                maxLevel = maxLevel,
+                isUnlocked = currentLevel > 0,
+                isMaxed = currentLevel >= maxLevel
+            };
+
+            if (nodeDefinition.prerequisiteNodeIds != null)
+            {
+                status.prerequisiteNodeIds.AddRange(nodeDefinition.prerequisiteNodeIds);
+            }
+
+            PopulateUnmetPrerequisites(snapshot, catalog, nodeDefinition, status);
+            status.isLocked = status.unmetPrerequisiteNodeIds.Count > 0;
+            status.canUpgrade = !status.isLocked && !status.isMaxed;
+            status.prerequisiteSummary = status.unmetPrerequisiteNames.Count == 0
+                ? "선행 max 조건 충족"
+                : $"필요: {string.Join(", ", status.unmetPrerequisiteNames)}";
+            return status;
+        }
+
+        /// <summary>
+        /// 미충족 선행 노드를 이름 기준으로 정리해 UI가 바로 문자열로 쓸 수 있게 합니다.
+        /// </summary>
+        private static void PopulateUnmetPrerequisites(
+            PlayerMetaProgressionSnapshot snapshot,
+            MetaProgressionCatalogAsset catalog,
+            SkillNodeDefinition nodeDefinition,
+            MetaProgressionNodeStatus status)
+        {
+            if (nodeDefinition.prerequisiteNodeIds == null)
+            {
+                return;
+            }
+
+            foreach (var prerequisiteNodeId in nodeDefinition.prerequisiteNodeIds)
+            {
+                if (!catalog.TryGetNodeDefinition(prerequisiteNodeId, out var prerequisiteDefinition) ||
+                    prerequisiteDefinition == null)
+                {
+                    status.unmetPrerequisiteNodeIds.Add(prerequisiteNodeId);
+                    status.unmetPrerequisiteNames.Add(prerequisiteNodeId);
+                    continue;
+                }
+
+                if (GetNodeLevel(snapshot, prerequisiteNodeId) >= math.max(1, prerequisiteDefinition.maxLevel))
+                {
+                    continue;
+                }
+
+                status.unmetPrerequisiteNodeIds.Add(prerequisiteNodeId);
+                status.unmetPrerequisiteNames.Add(prerequisiteDefinition.displayName);
+            }
+        }
+
+        /// <summary>
+        /// 브랜치명이 비어 있으면 enum 이름으로 폴백해 UI 표기를 유지합니다.
+        /// </summary>
+        private static string ResolveBranchDisplayName(MetaProgressionCatalogAsset catalog, SkillBranchId branchId)
+        {
+            if (catalog.TryGetBranchDefinition(branchId, out var branchDefinition) &&
+                branchDefinition != null &&
+                !string.IsNullOrWhiteSpace(branchDefinition.displayName))
+            {
+                return branchDefinition.displayName;
+            }
+
+            return branchId.ToString();
         }
 
         private static bool ContainsFlag(List<string> flags, string targetFlag)
