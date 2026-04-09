@@ -60,5 +60,25 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(state.deliveredCargoCount, Is.EqualTo(1));
             yield return null;
         }
+
+        [UnityTest]
+        public IEnumerator CargoArcMotionPeaksAboveEndpointsAndEndsAtTarget()
+        {
+            var start = new UnityEngine.Vector3(0f, 1f, 0f);
+            var end = new UnityEngine.Vector3(4f, 1f, 0f);
+
+            var startPoint = LoadingDockCargoArcMotion.Evaluate(start, end, 2f, 0f);
+            var midPoint = LoadingDockCargoArcMotion.Evaluate(start, end, 2f, 0.5f);
+            var endPoint = LoadingDockCargoArcMotion.Evaluate(start, end, 2f, 1f);
+
+            Assert.That(startPoint.x, Is.EqualTo(start.x).Within(0.001f));
+            Assert.That(startPoint.y, Is.EqualTo(start.y).Within(0.001f));
+            Assert.That(startPoint.z, Is.EqualTo(start.z).Within(0.001f));
+            Assert.That(endPoint.x, Is.EqualTo(end.x).Within(0.001f));
+            Assert.That(endPoint.y, Is.EqualTo(end.y).Within(0.001f));
+            Assert.That(endPoint.z, Is.EqualTo(end.z).Within(0.001f));
+            Assert.That(midPoint.y, Is.GreaterThan(start.y));
+            yield return null;
+        }
     }
 }

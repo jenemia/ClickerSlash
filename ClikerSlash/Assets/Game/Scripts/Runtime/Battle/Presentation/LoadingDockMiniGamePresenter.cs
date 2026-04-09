@@ -12,10 +12,14 @@ namespace ClikerSlash.Battle
         [SerializeField] private LoadingDockEnvironmentAuthoring environment;
         [SerializeField] [Min(0.1f)] private float cargoSpacing = 1.9f;
         [SerializeField] [Min(0.1f)] private float fragileDragDistance = 7f;
+        [SerializeField] [Min(0.05f)] private float cargoFlightDuration = 0.45f;
+        [SerializeField] [Min(0f)] private float cargoArcHeight = 2.1f;
 
         private readonly Dictionary<string, GameObject> _cargoViews = new();
         private readonly Dictionary<GameObject, string> _cargoIdsByView = new();
         private readonly Dictionary<string, Vector3> _homePositions = new();
+        private readonly Dictionary<string, LoadingDockCargoVisualFlight> _cargoFlights = new();
+        private readonly HashSet<string> _completedCargoFlights = new();
         private LoadingDockMiniGameRuntimeState _runtimeState;
         private string _draggingCargoId;
         private bool _wasLoadingDockActive;
@@ -171,7 +175,8 @@ namespace ClikerSlash.Battle
 
                 if (cargo.deliveryState == LoadingDockCargoDeliveryState.Delivered)
                 {
-                    cargoView.transform.position = environment.truckDropZone.position + new Vector3(0f, 0f, deliveredIndex * 1.25f);
+                    var deliveryTarget = environment.truckDropZone.position + new Vector3(0f, 0f, deliveredIndex * 1.25f);
+                    RefreshCargoFlight(cargo.cargoId, cargoView, deliveryTarget);
                     cargoView.GetComponent<Collider>().enabled = false;
                     deliveredIndex += 1;
                     continue;
@@ -277,7 +282,53 @@ namespace ClikerSlash.Battle
             _cargoViews.Clear();
             _cargoIdsByView.Clear();
             _homePositions.Clear();
+            _cargoFlights.Clear();
+            _completedCargoFlights.Clear();
             _runtimeState = null;
+        }
+
+        private void RefreshCargoFlight(string cargoId, GameObject cargoView, Vector3 deliveryTarget)
+        {
+            if (_completedCargoFlights.Contains(cargoId))
+            {
+                cargoView.transform.position = deliveryTarget;
+                return;
+            }
+
+            if (!_cargoFlights.TryGetValue(cargoId, out var flight))
+            {
+                flight = new LoadingDockCargoVisualFlight
+                {
+                    startPosition = cargoView.transform.position,
+                    targetPosition = deliveryTarget,
+                    elapsedTime = 0f
+                };
+                _cargoFlights[cargoId] = flight;
+            }
+
+            flight.targetPosition = deliveryTarget;
+            flight.elapsedTime += Mathf.Max(Time.deltaTime, 1f / 60f);
+            var duration = Mathf.Max(0.05f, cargoFlightDuration);
+            var normalizedTime = Mathf.Clamp01(flight.elapsedTime / duration);
+            cargoView.transform.position = LoadingDockCargoArcMotion.Evaluate(
+                flight.startPosition,
+                flight.targetPosition,
+                cargoArcHeight,
+                normalizedTime);
+
+            if (normalizedTime >= 1f)
+            {
+                cargoView.transform.position = flight.targetPosition;
+                _cargoFlights.Remove(cargoId);
+                _completedCargoFlights.Add(cargoId);
+            }
+        }
+
+        private sealed class LoadingDockCargoVisualFlight
+        {
+            public Vector3 startPosition;
+            public Vector3 targetPosition;
+            public float elapsedTime;
         }
     }
 }
