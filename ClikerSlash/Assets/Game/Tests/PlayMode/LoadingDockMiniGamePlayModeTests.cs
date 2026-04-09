@@ -80,5 +80,25 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(midPoint.y, Is.GreaterThan(start.y));
             yield return null;
         }
+
+        [UnityTest]
+        public IEnumerator CompletedRoundCreatesResultSnapshotWhenFlightsFinish()
+        {
+            var state = LoadingDockMiniGameRuntime.CreatePrototypeRound();
+            LoadingDockMiniGameRuntime.RegisterClick(state, "dock.standard_box");
+            LoadingDockMiniGameRuntime.RegisterClick(state, "dock.heavy_box");
+            LoadingDockMiniGameRuntime.RegisterClick(state, "dock.heavy_box");
+            LoadingDockMiniGameRuntime.RegisterClick(state, "dock.heavy_box");
+            LoadingDockMiniGameRuntime.BeginFragileDrag(state, "dock.fragile_box");
+            LoadingDockMiniGameRuntime.UpdateFragileDrag(state, "dock.fragile_box", 1f);
+            LoadingDockMiniGameRuntime.EndFragileDrag(state, "dock.fragile_box");
+
+            Assert.That(LoadingDockMiniGameRuntime.TryCreateCompletionResult(state, 1, out _), Is.False);
+            Assert.That(LoadingDockMiniGameRuntime.TryCreateCompletionResult(state, 0, out var result), Is.True);
+            Assert.That(result.DeliveredCargoCount, Is.EqualTo(3));
+            Assert.That(result.TotalCargoCount, Is.EqualTo(3));
+            Assert.That(result.CompletedSuccessfully, Is.True);
+            yield return null;
+        }
     }
 }

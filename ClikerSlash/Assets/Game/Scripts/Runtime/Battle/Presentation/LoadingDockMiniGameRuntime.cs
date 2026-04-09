@@ -152,6 +152,26 @@ namespace ClikerSlash.Battle
             return false;
         }
 
+        public static bool TryCreateCompletionResult(
+            LoadingDockMiniGameRuntimeState state,
+            int activeFlightCount,
+            out LoadingDockResultSnapshot result)
+        {
+            if (state == null || !state.IsCompleted || activeFlightCount > 0)
+            {
+                result = default;
+                return false;
+            }
+
+            result = new LoadingDockResultSnapshot
+            {
+                DeliveredCargoCount = state.deliveredCargoCount,
+                TotalCargoCount = state.cargos?.Count ?? 0,
+                CompletedSuccessfully = true
+            };
+            return true;
+        }
+
         private static LoadingDockCargoRuntimeState CreateCargo(
             string cargoId,
             string displayName,

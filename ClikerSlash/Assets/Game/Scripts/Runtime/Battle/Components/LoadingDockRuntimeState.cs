@@ -31,4 +31,14 @@ namespace ClikerSlash.Battle
         public bool HasPendingEntryRequest;
         public bool HasPendingReturnRequest;
     }
+
+    /// <summary>
+    /// 상하차 라운드 종료 시 남기는 결과 스냅샷입니다.
+    /// </summary>
+    public struct LoadingDockResultSnapshot
+    {
+        public int DeliveredCargoCount;
+        public int TotalCargoCount;
+        public bool CompletedSuccessfully;
+    }
 }

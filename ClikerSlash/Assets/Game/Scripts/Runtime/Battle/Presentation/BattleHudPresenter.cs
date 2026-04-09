@@ -78,8 +78,9 @@ namespace ClikerSlash.Battle
 
             HandleLoadingDockInput(loadingDockState, activeLaneCount, outcome);
 
-            infoText.text =
-                $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}";
+            infoText.text = PrototypeSessionRuntime.HasLastLoadingDockResult
+                ? $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}\nDock {PrototypeSessionRuntime.LastLoadingDockResult.DeliveredCargoCount}/{PrototypeSessionRuntime.LastLoadingDockResult.TotalCargoCount}"
+                : $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}";
             laneText.text =
                 $"Lane {lane.Value + 1} / {activeLaneCount}\nMax Weight {maxHandleWeight.Value}";
             if (controlsText != null)

@@ -14,6 +14,7 @@ namespace ClikerSlash.Battle
         [SerializeField] [Min(0.1f)] private float fragileDragDistance = 7f;
         [SerializeField] [Min(0.05f)] private float cargoFlightDuration = 0.45f;
         [SerializeField] [Min(0f)] private float cargoArcHeight = 2.1f;
+        [SerializeField] [Min(0f)] private float completionReturnDelay = 0.8f;
 
         private readonly Dictionary<string, GameObject> _cargoViews = new();
         private readonly Dictionary<GameObject, string> _cargoIdsByView = new();
@@ -23,6 +24,8 @@ namespace ClikerSlash.Battle
         private LoadingDockMiniGameRuntimeState _runtimeState;
         private string _draggingCargoId;
         private bool _wasLoadingDockActive;
+        private bool _completionQueued;
+        private float _completionCountdown;
 
         private void Update()
         {
@@ -47,6 +50,7 @@ namespace ClikerSlash.Battle
 
             if (!_wasLoadingDockActive || _runtimeState == null)
             {
+                PrototypeSessionRuntime.ClearLastLoadingDockResult();
                 _runtimeState = LoadingDockMiniGameRuntime.CreatePrototypeRound();
                 BuildCargoViews();
             }
@@ -54,6 +58,7 @@ namespace ClikerSlash.Battle
             _wasLoadingDockActive = true;
             HandlePointerInput();
             RefreshCargoViews();
+            TryQueueRoundCompletion();
         }
 
         private void OnGUI()
@@ -78,7 +83,9 @@ namespace ClikerSlash.Battle
             if (_runtimeState.IsCompleted)
             {
                 GUILayout.Space(8f);
-                GUILayout.Label("모든 화물 입력 완료");
+                GUILayout.Label(_completionQueued
+                    ? "모든 화물 적재 완료 - 레인 복귀 중"
+                    : "모든 화물 입력 완료");
             }
 
             GUILayout.EndArea();
@@ -284,6 +291,8 @@ namespace ClikerSlash.Battle
             _homePositions.Clear();
             _cargoFlights.Clear();
             _completedCargoFlights.Clear();
+            _completionQueued = false;
+            _completionCountdown = 0f;
             _runtimeState = null;
         }
 
@@ -329,6 +338,37 @@ namespace ClikerSlash.Battle
             public Vector3 startPosition;
             public Vector3 targetPosition;
             public float elapsedTime;
+        }
+
+        private void TryQueueRoundCompletion()
+        {
+            if (_runtimeState == null)
+            {
+                return;
+            }
+
+            if (!_completionQueued)
+            {
+                if (!LoadingDockMiniGameRuntime.TryCreateCompletionResult(
+                        _runtimeState,
+                        _cargoFlights.Count,
+                        out var completionResult))
+                {
+                    return;
+                }
+
+                PrototypeSessionRuntime.StoreLoadingDockResult(completionResult);
+                _completionQueued = true;
+                _completionCountdown = completionReturnDelay;
+            }
+
+            if (_completionCountdown > 0f)
+            {
+                _completionCountdown -= Mathf.Max(Time.deltaTime, 1f / 60f);
+                return;
+            }
+
+            PrototypeSessionRuntime.TryRequestLoadingDockReturn();
         }
     }
 }
