@@ -307,7 +307,7 @@ namespace ClikerSlash.Editor
             treeView.Bind(viewportRect, treeContentRect, panZoomController);
 
             var overviewPanel = CreatePanel("OverviewPanel", canvasRoot.transform, uiSprite, new Color(0.11f, 0.14f, 0.15f, 0.9f));
-            SetRect(overviewPanel.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -28f), new Vector2(360f, 268f));
+            SetRect(overviewPanel.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -28f), new Vector2(360f, 378f));
             var title = CreateWrapHudText("TitleLabel", overviewPanel.transform, 34, TextAlignmentOptions.TopLeft, Color.white);
             SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -18f), new Vector2(-44f, 42f));
             title.fontStyle = FontStyles.Bold;
@@ -320,8 +320,14 @@ namespace ClikerSlash.Editor
             SetRect(weight.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -146f), new Vector2(-44f, 34f));
             var lane = CreateWrapHudText("LaneLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
             SetRect(lane.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -182f), new Vector2(-44f, 34f));
+            var balance = CreateWrapHudText("BalanceLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(balance.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -218f), new Vector2(-44f, 34f));
+            var earned = CreateWrapHudText("EarnedLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(earned.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -254f), new Vector2(-44f, 34f));
+            var spent = CreateWrapHudText("SpentLabel", overviewPanel.transform, 24, TextAlignmentOptions.TopLeft, Color.white);
+            SetRect(spent.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(22f, -290f), new Vector2(-44f, 34f));
             var controls = CreateWrapHudText("ControlsLabel", overviewPanel.transform, 20, TextAlignmentOptions.TopLeft, new Color(0.79f, 0.88f, 0.83f));
-            SetRect(controls.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(22f, 18f), new Vector2(-44f, 42f));
+            SetRect(controls.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(22f, 18f), new Vector2(-44f, 54f));
 
             var selectionPanel = CreatePanel("SelectionPanel", canvasRoot.transform, uiSprite, new Color(0.11f, 0.13f, 0.14f, 0.92f));
             SetRect(selectionPanel.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(28f, 28f), new Vector2(360f, 294f));
@@ -349,6 +355,9 @@ namespace ClikerSlash.Editor
                 duration,
                 weight,
                 lane,
+                balance,
+                earned,
+                spent,
                 controls,
                 result,
                 selectionTitle,

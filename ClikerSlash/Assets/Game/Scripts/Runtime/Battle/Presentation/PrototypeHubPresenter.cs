@@ -15,6 +15,9 @@ namespace ClikerSlash.Battle
         [SerializeField] private WrapLabel durationLabel;
         [SerializeField] private WrapLabel weightLabel;
         [SerializeField] private WrapLabel laneLabel;
+        [SerializeField] private WrapLabel balanceLabel;
+        [SerializeField] private WrapLabel earnedLabel;
+        [SerializeField] private WrapLabel spentLabel;
         [SerializeField] private WrapLabel controlsLabel;
         [SerializeField] private WrapLabel resultLabel;
         [SerializeField] private WrapLabel selectionTitleLabel;
@@ -35,6 +38,9 @@ namespace ClikerSlash.Battle
             WrapLabel duration,
             WrapLabel weight,
             WrapLabel lane,
+            WrapLabel balance,
+            WrapLabel earned,
+            WrapLabel spent,
             WrapLabel controls,
             WrapLabel result,
             WrapLabel selectionTitle,
@@ -47,6 +53,9 @@ namespace ClikerSlash.Battle
             durationLabel = duration;
             weightLabel = weight;
             laneLabel = lane;
+            balanceLabel = balance;
+            earnedLabel = earned;
+            spentLabel = spent;
             controlsLabel = controls;
             resultLabel = result;
             selectionTitleLabel = selectionTitle;
@@ -140,12 +149,16 @@ namespace ClikerSlash.Battle
 
             var snapshot = PrototypeSessionRuntime.GetMetaProgressionSnapshot();
             var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
+            var currency = PrototypeSessionRuntime.GetCurrencySnapshot();
 
             if (titleLabel != null) titleLabel.text = "PROTOTYPE HUB";
             if (healthLabel != null) healthLabel.text = $"Health Lv {PrototypeSessionRuntime.HealthLevel}";
             if (durationLabel != null) durationLabel.text = $"Next Work {PrototypeSessionRuntime.PreviewResolvedWorkDuration():0.0}s";
             if (weightLabel != null) weightLabel.text = $"Max Weight {resolvedProgression.MaxHandleWeight}";
             if (laneLabel != null) laneLabel.text = $"Active Lanes {resolvedProgression.ActiveLaneCount}";
+            if (balanceLabel != null) balanceLabel.text = $"Balance {currency.currentBalance}";
+            if (earnedLabel != null) earnedLabel.text = $"Earned {currency.totalBattleEarned}";
+            if (spentLabel != null) spentLabel.text = $"Spent {currency.totalSkillSpent}";
             if (controlsLabel != null) controlsLabel.text = "드래그 이동 / 휠 줌 / 클릭 업그레이드";
             if (resultLabel != null) resultLabel.text = BuildResultSummary();
 
@@ -182,6 +195,7 @@ namespace ClikerSlash.Battle
                     $"티어: {selectedNodeStatus.tier}\n" +
                     $"레벨: {selectedNodeStatus.currentLevel}/{selectedNodeStatus.maxLevel}\n" +
                     $"코스트: {selectedNodeStatus.cost}\n" +
+                    $"{selectedNodeStatus.affordabilitySummary}\n" +
                     $"{selectedNodeStatus.prerequisiteSummary}\n" +
                     $"효과: {BuildEffectSummary(nodeDefinition)}";
             }

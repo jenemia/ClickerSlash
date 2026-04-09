@@ -21,6 +21,10 @@ namespace ClikerSlash.Tests.PlayMode
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
             var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
 
+            Assert.That(snapshot.currency, Is.Not.Null);
+            Assert.That(snapshot.currency.currentBalance, Is.Zero);
+            Assert.That(snapshot.currency.totalBattleEarned, Is.Zero);
+            Assert.That(snapshot.currency.totalSkillSpent, Is.Zero);
             Assert.That(resolved.ActiveLaneCount, Is.EqualTo(catalog.workerBaseStats.startingUnlockedLaneCount));
             Assert.That(resolved.MaxHandleWeight, Is.EqualTo(catalog.workerBaseStats.baseMaxHandleWeight));
             Assert.That(resolved.LaneMoveDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseLaneMoveDurationSeconds).Within(0.001f));
@@ -62,15 +66,64 @@ namespace ClikerSlash.Tests.PlayMode
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
             Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.StarterVitalityNodeId), Is.True);
             Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "automation.weight_scanner"), Is.True);
+            snapshot.currency.currentBalance = 14;
+            snapshot.currency.totalBattleEarned = 21;
+            snapshot.currency.totalSkillSpent = 7;
 
             var runtimeState = MetaProgressionProtoContractMapper.FromContract(snapshot, catalog, 4);
             var roundTrip = MetaProgressionProtoContractMapper.ToContract(runtimeState);
 
             Assert.That(roundTrip.schemaVersion, Is.EqualTo(snapshot.schemaVersion));
             Assert.That(roundTrip.resolvedLoadoutVersion, Is.EqualTo(snapshot.resolvedLoadoutVersion));
+            Assert.That(roundTrip.currency.currentBalance, Is.EqualTo(snapshot.currency.currentBalance));
+            Assert.That(roundTrip.currency.totalBattleEarned, Is.EqualTo(snapshot.currency.totalBattleEarned));
+            Assert.That(roundTrip.currency.totalSkillSpent, Is.EqualTo(snapshot.currency.totalSkillSpent));
             Assert.That(roundTrip.unlockedNodeStates.Count, Is.EqualTo(snapshot.unlockedNodeStates.Count));
             Assert.That(roundTrip.unlockedNodeStates[0].nodeId, Is.EqualTo(snapshot.unlockedNodeStates[0].nodeId));
             Assert.That(roundTrip.unlockedNodeStates[0].level, Is.EqualTo(snapshot.unlockedNodeStates[0].level));
+            yield return null;
+        }
+
+        /// <summary>
+        /// 이전 계약에 재화 필드가 없어도 0원 기본값으로 보정되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator NullCurrencyContractsAreNormalizedToZeroValues()
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
+            snapshot.currency = null;
+
+            var runtimeState = MetaProgressionProtoContractMapper.FromContract(snapshot, catalog, 4);
+            var roundTrip = MetaProgressionProtoContractMapper.ToContract(runtimeState);
+
+            Assert.That(roundTrip.currency, Is.Not.Null);
+            Assert.That(roundTrip.currency.currentBalance, Is.Zero);
+            Assert.That(roundTrip.currency.totalBattleEarned, Is.Zero);
+            Assert.That(roundTrip.currency.totalSkillSpent, Is.Zero);
+            yield return null;
+        }
+
+        /// <summary>
+        /// 허브 노드 상태가 현재 재화 기준으로 구매 가능 여부를 함께 계산해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator NodeStatusReflectsAffordabilityFromCurrencyBalance()
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
+            snapshot.currency.currentBalance = 0;
+
+            var status = MetaProgressionCalculator.DescribeNode(snapshot, catalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
+            Assert.That(status.isAffordable, Is.False);
+            Assert.That(status.canUpgrade, Is.False);
+            Assert.That(status.affordabilitySummary, Is.EqualTo("재화 부족 (보유 0 / 필요 1)"));
+
+            snapshot.currency.currentBalance = 1;
+            status = MetaProgressionCalculator.DescribeNode(snapshot, catalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
+            Assert.That(status.isAffordable, Is.True);
+            Assert.That(status.canUpgrade, Is.True);
+            Assert.That(status.affordabilitySummary, Is.EqualTo("구매 가능 (보유 1)"));
             yield return null;
         }
 

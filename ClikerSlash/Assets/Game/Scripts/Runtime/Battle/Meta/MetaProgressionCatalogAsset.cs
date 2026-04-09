@@ -101,9 +101,34 @@ namespace ClikerSlash.Battle
     {
         public int schemaVersion;
         public WorkerStatsSnapshot workerStats;
+        public PlayerCurrencySnapshot currency;
         public List<UnlockedSkillNodeState> unlockedNodeStates = new List<UnlockedSkillNodeState>();
         public List<string> selectedAutomationFlags = new List<string>();
         public int resolvedLoadoutVersion;
+    }
+
+    /// <summary>
+    /// 플레이어가 벌고 사용한 재화를 세션 범위에서 추적하는 DTO입니다.
+    /// </summary>
+    [Serializable]
+    public sealed class PlayerCurrencySnapshot
+    {
+        public int currentBalance;
+        public int totalBattleEarned;
+        public int totalSkillSpent;
+
+        /// <summary>
+        /// 0원 기준 기본 재화 상태를 생성합니다.
+        /// </summary>
+        public static PlayerCurrencySnapshot CreateDefault()
+        {
+            return new PlayerCurrencySnapshot
+            {
+                currentBalance = 0,
+                totalBattleEarned = 0,
+                totalSkillSpent = 0
+            };
+        }
     }
 
     /// <summary>
@@ -210,7 +235,7 @@ namespace ClikerSlash.Battle
         menuName = "ClikerSlash/Meta/Meta Progression Catalog")]
     public sealed class MetaProgressionCatalogAsset : ScriptableObject
     {
-        public const int DefaultSchemaVersion = 1;
+        public const int DefaultSchemaVersion = 2;
         public const string DefaultResourcePath = "MetaProgression/DefaultMetaProgressionCatalog";
         public const string StarterVitalityNodeId = "vitality.basic_stamina_training";
         public const string LaneExpansionNodeIdTier1 = "management.lane_expansion_i";
@@ -294,7 +319,7 @@ namespace ClikerSlash.Battle
         /// </summary>
         public void EnsureDefaults()
         {
-            schemaVersion = Mathf.Max(1, schemaVersion);
+            schemaVersion = Mathf.Max(DefaultSchemaVersion, schemaVersion);
             workerBaseStats ??= WorkerBaseStatsDefinition.CreateDefault();
             skillBranches ??= CreateDefaultBranches();
             skillNodes ??= CreateDefaultNodes();

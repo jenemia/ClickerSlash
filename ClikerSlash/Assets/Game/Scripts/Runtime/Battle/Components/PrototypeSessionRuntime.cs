@@ -66,6 +66,23 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
+        /// 현재 세션 플레이어 재화 상태를 읽기 전용 복사본으로 반환합니다.
+        /// </summary>
+        public static PlayerCurrencySnapshot GetCurrencySnapshot()
+        {
+            EnsureMetaProgressionInitialized(MetaProgressionCatalogAsset.LoadDefaultCatalog());
+            var currency = _metaProgressionRuntimeState?.snapshot?.currency;
+            return currency == null
+                ? PlayerCurrencySnapshot.CreateDefault()
+                : new PlayerCurrencySnapshot
+                {
+                    currentBalance = currency.currentBalance,
+                    totalBattleEarned = currency.totalBattleEarned,
+                    totalSkillSpent = currency.totalSkillSpent
+                };
+        }
+
+        /// <summary>
         /// 현재 세션 시작에 쓰일 메타 집계 결과를 반환합니다.
         /// </summary>
         public static ResolvedMetaProgression GetResolvedMetaProgression()
@@ -83,8 +100,18 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static void StoreBattleResult(BattleResultSnapshot snapshot)
         {
+            EnsureMetaProgressionInitialized(MetaProgressionCatalogAsset.LoadDefaultCatalog());
             LastBattleResult = snapshot;
             HasLastBattleResult = true;
+
+            if (snapshot.TotalMoney <= 0)
+            {
+                return;
+            }
+
+            EnsureCurrencyInitialized();
+            _metaProgressionRuntimeState.snapshot.currency.currentBalance += snapshot.TotalMoney;
+            _metaProgressionRuntimeState.snapshot.currency.totalBattleEarned += snapshot.TotalMoney;
         }
 
         /// <summary>
@@ -141,9 +168,9 @@ namespace ClikerSlash.Battle
         /// <summary>
         /// 허브 임시 메타 상태에서 시작 체력 노드를 한 단계 올립니다.
         /// </summary>
-        public static void IncreaseHealthLevel()
+        public static bool IncreaseHealthLevel()
         {
-            TryUpgradeNode(MetaProgressionCatalogAsset.StarterVitalityNodeId, MetaProgressionCatalogAsset.LoadDefaultCatalog());
+            return TryUpgradeNode(MetaProgressionCatalogAsset.StarterVitalityNodeId, MetaProgressionCatalogAsset.LoadDefaultCatalog());
         }
 
         /// <summary>
@@ -155,8 +182,26 @@ namespace ClikerSlash.Battle
             int physicalLaneCount = int.MaxValue)
         {
             EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
+            if (!catalog.TryGetNodeDefinition(nodeId, out var nodeDefinition) || nodeDefinition == null)
+            {
+                return false;
+            }
+
+            EnsureCurrencyInitialized();
+            var nodeStatus = MetaProgressionCalculator.DescribeNode(_metaProgressionRuntimeState.snapshot, catalog, nodeId);
+            if (nodeStatus == null || !nodeStatus.canUpgrade)
+            {
+                return false;
+            }
+
+            var cost = Mathf.Max(0, nodeDefinition.cost);
+            _metaProgressionRuntimeState.snapshot.currency.currentBalance -= cost;
+            _metaProgressionRuntimeState.snapshot.currency.totalSkillSpent += cost;
+
             if (!MetaProgressionCalculator.TryUpgradeNode(_metaProgressionRuntimeState.snapshot, catalog, nodeId))
             {
+                _metaProgressionRuntimeState.snapshot.currency.currentBalance += cost;
+                _metaProgressionRuntimeState.snapshot.currency.totalSkillSpent -= cost;
                 return false;
             }
 
@@ -222,6 +267,13 @@ namespace ClikerSlash.Battle
                 _metaProgressionRuntimeState?.snapshot,
                 catalog,
                 physicalLaneCount);
+        }
+
+        private static void EnsureCurrencyInitialized()
+        {
+            _metaProgressionRuntimeState ??= new MetaProgressionRuntimeState();
+            _metaProgressionRuntimeState.snapshot ??= MetaProgressionCalculator.CreateDefaultSnapshot(MetaProgressionCatalogAsset.LoadDefaultCatalog());
+            _metaProgressionRuntimeState.snapshot.currency ??= PlayerCurrencySnapshot.CreateDefault();
         }
 
         /// <summary>

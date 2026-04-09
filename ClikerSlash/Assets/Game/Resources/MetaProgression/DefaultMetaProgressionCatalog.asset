@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ddf9796b3bc4a1996d0df5220b55510, type: 3}
   m_Name: DefaultMetaProgressionCatalog
   m_EditorClassIdentifier: 
-  schemaVersion: 1
+  schemaVersion: 2
   workerBaseStats:
     baseSessionDurationSeconds: 20
     baseMaxHandleWeight: 10

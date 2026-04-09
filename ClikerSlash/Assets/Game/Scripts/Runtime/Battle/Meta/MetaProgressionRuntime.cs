@@ -55,10 +55,13 @@ namespace ClikerSlash.Battle
         public bool canUpgrade;
         // true면 최대 레벨에 도달해 더 이상 클릭 업그레이드가 일어나지 않습니다.
         public bool isMaxed;
+        public bool isAffordable;
+        public int currentBalance;
         public List<string> prerequisiteNodeIds = new List<string>();
         public List<string> unmetPrerequisiteNodeIds = new List<string>();
         public List<string> unmetPrerequisiteNames = new List<string>();
         public string prerequisiteSummary;
+        public string affordabilitySummary;
     }
 
     /// <summary>
@@ -78,6 +81,7 @@ namespace ClikerSlash.Battle
             {
                 schemaVersion = catalog.schemaVersion,
                 workerStats = WorkerStatsSnapshot.FromDefinition(catalog.workerBaseStats),
+                currency = PlayerCurrencySnapshot.CreateDefault(),
                 unlockedNodeStates = CloneUnlockedStates(catalog.startingProgression.unlockedNodeStates),
                 selectedAutomationFlags = CloneStrings(catalog.startingProgression.selectedAutomationFlags),
                 resolvedLoadoutVersion = catalog.startingProgression.resolvedLoadoutVersion
@@ -96,6 +100,7 @@ namespace ClikerSlash.Battle
             catalog.EnsureDefaults();
             snapshot ??= CreateDefaultSnapshot(catalog);
             snapshot.workerStats ??= WorkerStatsSnapshot.FromDefinition(catalog.workerBaseStats);
+            snapshot.currency ??= PlayerCurrencySnapshot.CreateDefault();
             snapshot.unlockedNodeStates ??= new List<UnlockedSkillNodeState>();
             snapshot.selectedAutomationFlags ??= new List<string>();
 
@@ -225,6 +230,7 @@ namespace ClikerSlash.Battle
         {
             catalog = catalog != null ? catalog : MetaProgressionCatalogAsset.LoadDefaultCatalog();
             snapshot ??= CreateDefaultSnapshot(catalog);
+            snapshot.currency ??= PlayerCurrencySnapshot.CreateDefault();
             snapshot.unlockedNodeStates ??= new List<UnlockedSkillNodeState>();
 
             if (!catalog.TryGetNodeDefinition(nodeId, out var nodeDefinition) || nodeDefinition == null)
@@ -366,6 +372,8 @@ namespace ClikerSlash.Battle
         {
             var currentLevel = GetNodeLevel(snapshot, nodeDefinition.nodeId);
             var maxLevel = math.max(1, nodeDefinition.maxLevel);
+            var currentBalance = math.max(0, snapshot.currency?.currentBalance ?? 0);
+            var cost = math.max(0, nodeDefinition.cost);
             var status = new MetaProgressionNodeStatus
             {
                 nodeId = nodeDefinition.nodeId,
@@ -375,9 +383,10 @@ namespace ClikerSlash.Battle
                 branchId = nodeDefinition.branchId,
                 branchDisplayName = ResolveBranchDisplayName(catalog, nodeDefinition.branchId),
                 tier = math.max(1, nodeDefinition.tier),
-                cost = math.max(0, nodeDefinition.cost),
+                cost = cost,
                 currentLevel = currentLevel,
                 maxLevel = maxLevel,
+                currentBalance = currentBalance,
                 isUnlocked = currentLevel > 0,
                 isMaxed = currentLevel >= maxLevel
             };
@@ -389,11 +398,30 @@ namespace ClikerSlash.Battle
 
             PopulateUnmetPrerequisites(snapshot, catalog, nodeDefinition, status);
             status.isLocked = status.unmetPrerequisiteNodeIds.Count > 0;
-            status.canUpgrade = !status.isLocked && !status.isMaxed;
+            status.isAffordable = cost <= currentBalance;
+            status.canUpgrade = !status.isLocked && !status.isMaxed && status.isAffordable;
             status.prerequisiteSummary = status.unmetPrerequisiteNames.Count == 0
                 ? "선행 max 조건 충족"
                 : $"필요: {string.Join(", ", status.unmetPrerequisiteNames)}";
+            status.affordabilitySummary = BuildAffordabilitySummary(status);
             return status;
+        }
+
+        private static string BuildAffordabilitySummary(MetaProgressionNodeStatus status)
+        {
+            if (status.isLocked)
+            {
+                return "선행 스킬 조건 필요";
+            }
+
+            if (status.isMaxed)
+            {
+                return "최대 레벨 도달";
+            }
+
+            return status.isAffordable
+                ? $"구매 가능 (보유 {status.currentBalance})"
+                : $"재화 부족 (보유 {status.currentBalance} / 필요 {status.cost})";
         }
 
         /// <summary>
@@ -567,6 +595,14 @@ namespace ClikerSlash.Battle
                         baseRewardMultiplier = source.workerStats.baseRewardMultiplier,
                         basePenaltyMultiplier = source.workerStats.basePenaltyMultiplier,
                         startingUnlockedLaneCount = source.workerStats.startingUnlockedLaneCount
+                    },
+                currency = source.currency == null
+                    ? PlayerCurrencySnapshot.CreateDefault()
+                    : new PlayerCurrencySnapshot
+                    {
+                        currentBalance = source.currency.currentBalance,
+                        totalBattleEarned = source.currency.totalBattleEarned,
+                        totalSkillSpent = source.currency.totalSkillSpent
                     },
                 unlockedNodeStates = source.unlockedNodeStates == null
                     ? new List<UnlockedSkillNodeState>()

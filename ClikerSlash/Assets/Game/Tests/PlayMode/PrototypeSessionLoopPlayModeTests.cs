@@ -22,7 +22,8 @@ namespace ClikerSlash.Tests.PlayMode
         public IEnumerator HealthLevelControlsResolvedWorkDurationOnBattleEntry()
         {
             PrototypeSessionRuntime.ResetPrototypeState();
-            PrototypeSessionRuntime.IncreaseHealthLevel();
+            SeedRuntimeCurrency(1);
+            Assert.That(PrototypeSessionRuntime.IncreaseHealthLevel(), Is.True);
             var expectedDuration = PrototypeSessionRuntime.GetResolvedMetaProgression().SessionDurationSeconds;
 
             yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
@@ -125,7 +126,8 @@ namespace ClikerSlash.Tests.PlayMode
             var hubPresenter = Object.FindFirstObjectByType<PrototypeHubPresenter>();
             Assert.That(hubPresenter, Is.Not.Null);
 
-            PrototypeSessionRuntime.IncreaseHealthLevel();
+            SeedRuntimeCurrency(1);
+            Assert.That(PrototypeSessionRuntime.IncreaseHealthLevel(), Is.True);
             hubPresenter.LoadPrototypeBattle();
             yield return WaitForSceneAndWorld(PrototypeSessionRuntime.BattleSceneName);
 
@@ -142,7 +144,78 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(stats.MissedCargoCount, Is.EqualTo(0));
             Assert.That(stats.CurrentCombo, Is.EqualTo(0));
             Assert.That(PrototypeSessionRuntime.HealthLevel, Is.EqualTo(2));
+            Assert.That(PrototypeSessionRuntime.GetCurrencySnapshot().currentBalance, Is.EqualTo(0));
+            Assert.That(PrototypeSessionRuntime.GetCurrencySnapshot().totalSkillSpent, Is.EqualTo(1));
             Assert.That(sessionRules.ActiveLaneCount, Is.EqualTo(catalog.workerBaseStats.startingUnlockedLaneCount));
+        }
+
+        /// <summary>
+        /// 양수 전투 결과는 플레이어 잔액과 누적 획득량으로 정산되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator PositiveBattleResultsIncreasePlayerCurrency()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+
+            PrototypeSessionRuntime.StoreBattleResult(new BattleResultSnapshot
+            {
+                TotalMoney = 120,
+                WorkedTimeSeconds = 12f
+            });
+
+            var currency = PrototypeSessionRuntime.GetCurrencySnapshot();
+            Assert.That(currency.currentBalance, Is.EqualTo(120));
+            Assert.That(currency.totalBattleEarned, Is.EqualTo(120));
+            Assert.That(currency.totalSkillSpent, Is.Zero);
+            yield return null;
+        }
+
+        /// <summary>
+        /// 음수 전투 결과는 최근 결과에는 남더라도 플레이어 잔액은 깎지 않아야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator NegativeBattleResultsDoNotReducePlayerBalance()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+
+            PrototypeSessionRuntime.StoreBattleResult(new BattleResultSnapshot
+            {
+                TotalMoney = 80,
+                WorkedTimeSeconds = 10f
+            });
+            PrototypeSessionRuntime.StoreBattleResult(new BattleResultSnapshot
+            {
+                TotalMoney = -40,
+                WorkedTimeSeconds = 5f
+            });
+
+            var currency = PrototypeSessionRuntime.GetCurrencySnapshot();
+            Assert.That(currency.currentBalance, Is.EqualTo(80));
+            Assert.That(currency.totalBattleEarned, Is.EqualTo(80));
+            Assert.That(PrototypeSessionRuntime.LastBattleResult.TotalMoney, Is.EqualTo(-40));
+            yield return null;
+        }
+
+        /// <summary>
+        /// 허브 구매는 재화가 충분할 때만 진행되고 사용 금액이 누적되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator RuntimeUpgradeConsumesCurrencyAndRejectsInsufficientFunds()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            SeedRuntimeCurrency(1);
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+
+            Assert.That(PrototypeSessionRuntime.TryUpgradeNode(MetaProgressionCatalogAsset.StarterVitalityNodeId, catalog), Is.True);
+            var currency = PrototypeSessionRuntime.GetCurrencySnapshot();
+            Assert.That(currency.currentBalance, Is.Zero);
+            Assert.That(currency.totalSkillSpent, Is.EqualTo(1));
+
+            Assert.That(PrototypeSessionRuntime.TryUpgradeNode("strength.basic_strength_training", catalog), Is.False);
+            currency = PrototypeSessionRuntime.GetCurrencySnapshot();
+            Assert.That(currency.currentBalance, Is.Zero);
+            Assert.That(currency.totalSkillSpent, Is.EqualTo(1));
+            yield return null;
         }
 
         private static IEnumerator LoadSceneAndWait(string sceneName)
@@ -188,6 +261,17 @@ namespace ClikerSlash.Tests.PlayMode
                 new float3(laneX, cargoConfig.Y, zPosition),
                 quaternion.identity,
                 1f));
+        }
+
+        private static void SeedRuntimeCurrency(int amount)
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            PrototypeSessionRuntime.EnsureMetaProgressionInitialized(catalog);
+            var snapshot = PrototypeSessionRuntime.GetMetaProgressionSnapshot();
+            snapshot.currency ??= PlayerCurrencySnapshot.CreateDefault();
+            snapshot.currency.currentBalance = amount;
+            snapshot.currency.totalBattleEarned = amount;
+            PrototypeSessionRuntime.SetMetaProgressionSnapshot(snapshot, catalog);
         }
     }
 }
