@@ -40,6 +40,14 @@ namespace ClikerSlash.Battle
             var laneLayout = SystemAPI.GetSingleton<LaneLayout>();
             var laneEntity = SystemAPI.GetSingletonEntity<LaneLayout>();
             var laneXs = state.EntityManager.GetBuffer<LaneWorldXElement>(laneEntity);
+            var activeLaneCount = laneLayout.LaneCount;
+            if (SystemAPI.HasSingleton<SessionRuleState>())
+            {
+                activeLaneCount = Unity.Mathematics.math.min(
+                    activeLaneCount,
+                    Unity.Mathematics.math.max(1, SystemAPI.GetSingleton<SessionRuleState>().ActiveLaneCount));
+            }
+
             var spawnTimer = SystemAPI.GetSingletonRW<SpawnTimerState>();
 
             spawnTimer.ValueRW.Remaining -= deltaTime;
@@ -49,7 +57,7 @@ namespace ClikerSlash.Battle
             }
 
             spawnTimer.ValueRW.Remaining += battleConfig.SpawnInterval;
-            var laneIndex = spawnTimer.ValueRW.Random.NextInt(0, laneLayout.LaneCount);
+            var laneIndex = spawnTimer.ValueRW.Random.NextInt(0, activeLaneCount);
             var laneX = BattleLaneUtility.GetLaneX(laneXs, laneIndex);
 
             var cargoEntity = state.EntityManager.CreateEntity();

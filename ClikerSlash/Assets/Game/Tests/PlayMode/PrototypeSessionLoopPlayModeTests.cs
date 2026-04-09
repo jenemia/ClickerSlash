@@ -31,10 +31,12 @@ namespace ClikerSlash.Tests.PlayMode
             var stage = entityManager.CreateEntityQuery(typeof(StageProgressState)).GetSingleton<StageProgressState>();
             var stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
             var expectedDuration = battleConfig.BaseWorkDurationSeconds + battleConfig.HealthDurationBonusSeconds;
+            var progressionStats = entityManager.CreateEntityQuery(typeof(WorkerProgressionStats)).GetSingleton<WorkerProgressionStats>();
 
             Assert.That(stage.RemainingWorkTime, Is.EqualTo(expectedDuration).Within(0.01f));
             Assert.That(stats.ResolvedWorkDurationSeconds, Is.EqualTo(expectedDuration).Within(0.01f));
             Assert.That(PrototypeSessionRuntime.ResolvedWorkDurationSeconds, Is.EqualTo(expectedDuration).Within(0.01f));
+            Assert.That(progressionStats.SessionDurationSeconds, Is.EqualTo(expectedDuration).Within(0.01f));
         }
 
         /// <summary>
@@ -60,8 +62,9 @@ namespace ClikerSlash.Tests.PlayMode
 
             var comboState = entityManager.GetComponentData<ComboState>(playerEntity);
             var stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
+            var economyModifier = entityManager.CreateEntityQuery(typeof(EconomyModifier)).GetSingleton<EconomyModifier>();
             Assert.That(stats.ProcessedCargoCount, Is.EqualTo(1));
-            Assert.That(stats.TotalMoney, Is.EqualTo(75));
+            Assert.That(stats.TotalMoney, Is.EqualTo(Mathf.RoundToInt(75 * economyModifier.RewardMultiplier)));
             Assert.That(comboState.Current, Is.EqualTo(1));
             Assert.That(comboState.Max, Is.EqualTo(1));
 
@@ -73,8 +76,10 @@ namespace ClikerSlash.Tests.PlayMode
 
             comboState = entityManager.GetComponentData<ComboState>(playerEntity);
             stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
+            var expectedMoney = Mathf.RoundToInt(75 * economyModifier.RewardMultiplier)
+                - Mathf.RoundToInt(40 * economyModifier.PenaltyMultiplier);
             Assert.That(stats.MissedCargoCount, Is.EqualTo(1));
-            Assert.That(stats.TotalMoney, Is.EqualTo(35));
+            Assert.That(stats.TotalMoney, Is.EqualTo(expectedMoney));
             Assert.That(comboState.Current, Is.EqualTo(0));
             Assert.That(comboState.Max, Is.EqualTo(1));
         }
@@ -129,6 +134,7 @@ namespace ClikerSlash.Tests.PlayMode
             var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
             var stage = entityManager.CreateEntityQuery(typeof(StageProgressState)).GetSingleton<StageProgressState>();
             var stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
+            var sessionRules = entityManager.CreateEntityQuery(typeof(SessionRuleState)).GetSingleton<SessionRuleState>();
             var expectedDuration = battleConfig.BaseWorkDurationSeconds + battleConfig.HealthDurationBonusSeconds;
 
             Assert.That(stage.RemainingWorkTime, Is.EqualTo(expectedDuration).Within(0.01f));
@@ -137,6 +143,7 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(stats.MissedCargoCount, Is.EqualTo(0));
             Assert.That(stats.CurrentCombo, Is.EqualTo(0));
             Assert.That(PrototypeSessionRuntime.HealthLevel, Is.EqualTo(2));
+            Assert.That(sessionRules.ActiveLaneCount, Is.EqualTo(2));
         }
 
         private static IEnumerator LoadSceneAndWait(string sceneName)

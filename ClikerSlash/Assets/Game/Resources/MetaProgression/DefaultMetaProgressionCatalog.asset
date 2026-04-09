@@ -1,0 +1,193 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ddf9796b3bc4a1996d0df5220b55510, type: 3}
+  m_Name: DefaultMetaProgressionCatalog
+  m_EditorClassIdentifier: 
+  schemaVersion: 1
+  workerBaseStats:
+    baseSessionDurationSeconds: 20
+    baseMaxHandleWeight: 10
+    baseLaneMoveDurationSeconds: 0.18
+    baseTimingWindowHalfDepth: 0.45
+    baseRewardMultiplier: 1
+    basePenaltyMultiplier: 1
+    startingUnlockedLaneCount: 3
+  skillBranches:
+  - branchId: 0
+    displayName: "\uCCB4\uB825"
+    sortOrder: 0
+  - branchId: 1
+    displayName: "\uADFC\uB825"
+    sortOrder: 1
+  - branchId: 2
+    displayName: "\uC774\uB3D9"
+    sortOrder: 2
+  - branchId: 3
+    displayName: "\uC219\uB828"
+    sortOrder: 3
+  - branchId: 4
+    displayName: "\uACBD\uC601"
+    sortOrder: 4
+  - branchId: 5
+    displayName: "\uC790\uB3D9\uD654"
+    sortOrder: 5
+  skillNodes:
+  - nodeId: vitality.basic_stamina_training
+    branchId: 0
+    displayName: "\uAE30\uCD08 \uCCB4\uB825 \uB2E8\uB828"
+    tier: 1
+    maxLevel: 10
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 0
+      operation: 0
+      intValue: 10
+      floatValue: 10
+      targetKey: 
+  - nodeId: strength.basic_strength_training
+    branchId: 1
+    displayName: "\uAE30\uCD08 \uADFC\uB825 \uD6C8\uB828"
+    tier: 1
+    maxLevel: 10
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 1
+      operation: 0
+      intValue: 2
+      floatValue: 2
+      targetKey: 
+  - nodeId: mobility.footwork_training
+    branchId: 2
+    displayName: "\uBC1C\uB180\uB9BC \uAC15\uD654"
+    tier: 1
+    maxLevel: 5
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 2
+      operation: 1
+      intValue: 1
+      floatValue: 0.9
+      targetKey: 
+  - nodeId: mastery.work_sense_training
+    branchId: 3
+    displayName: "\uC791\uC5C5 \uAC10\uAC01 \uD5A5\uC0C1"
+    tier: 1
+    maxLevel: 5
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 3
+      operation: 0
+      intValue: 0
+      floatValue: 0.05
+      targetKey: 
+  - nodeId: management.performance_contract
+    branchId: 4
+    displayName: "\uC131\uACFC\uAE09 \uACC4\uC57D"
+    tier: 1
+    maxLevel: 5
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 4
+      operation: 0
+      intValue: 0
+      floatValue: 0.05
+      targetKey: 
+  - nodeId: management.lane_expansion_i
+    branchId: 4
+    displayName: "\uB77C\uC778 \uC99D\uC124 I"
+    tier: 2
+    maxLevel: 1
+    cost: 2
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 6
+      operation: 2
+      intValue: 3
+      floatValue: 3
+      targetKey: 
+  - nodeId: management.lane_expansion_ii
+    branchId: 4
+    displayName: "\uB77C\uC778 \uC99D\uC124 II"
+    tier: 3
+    maxLevel: 1
+    cost: 3
+    prerequisiteNodeIds:
+    - management.lane_expansion_i
+    effects:
+    - effectType: 6
+      operation: 2
+      intValue: 4
+      floatValue: 4
+      targetKey: 
+  - nodeId: management.lane_expansion_iii
+    branchId: 4
+    displayName: "\uB77C\uC778 \uC99D\uC124 III"
+    tier: 4
+    maxLevel: 1
+    cost: 4
+    prerequisiteNodeIds:
+    - management.lane_expansion_ii
+    effects:
+    - effectType: 6
+      operation: 2
+      intValue: 5
+      floatValue: 5
+      targetKey: 
+  - nodeId: automation.weight_scanner
+    branchId: 5
+    displayName: "\uC790\uB3D9 \uC2A4\uCE90\uB108"
+    tier: 1
+    maxLevel: 1
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 9
+      operation: 3
+      intValue: 0
+      floatValue: 0
+      targetKey: automation.weight_preview
+  - nodeId: automation.return_belt
+    branchId: 5
+    displayName: "\uB9AC\uD134 \uBCA8\uD2B8"
+    tier: 2
+    maxLevel: 3
+    cost: 2
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 8
+      operation: 0
+      intValue: 0
+      floatValue: 0.15
+      targetKey: 
+  - nodeId: automation.assist_arm
+    branchId: 5
+    displayName: "\uBCF4\uC870 \uC554 \uC124\uCE58"
+    tier: 3
+    maxLevel: 1
+    cost: 3
+    prerequisiteNodeIds:
+    - automation.weight_scanner
+    effects:
+    - effectType: 9
+      operation: 3
+      intValue: 0
+      floatValue: 0
+      targetKey: automation.assist_arm
+  startingProgression:
+    unlockedNodeStates: []
+    selectedAutomationFlags: []
+    resolvedLoadoutVersion: 0

@@ -36,7 +36,9 @@ namespace ClikerSlash.Battle
             var playerConfig = SystemAPI.GetSingleton<PlayerConfig>();
             var laneEntity = SystemAPI.GetSingletonEntity<LaneLayout>();
             var laneXs = state.EntityManager.GetBuffer<LaneWorldXElement>(laneEntity);
-            var initialLane = BattleLaneUtility.ClampLane(playerConfig.InitialLane, laneXs.Length);
+            var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
+            var activeLaneCount = MetaProgressionBootstrapBridge.ResolveActiveLaneCount(resolvedProgression, laneXs.Length);
+            var initialLane = BattleLaneUtility.ClampLane(playerConfig.InitialLane, activeLaneCount);
             var playerX = BattleLaneUtility.GetLaneX(laneXs, initialLane);
             var resolvedWorkDuration = PrototypeSessionRuntime.ResolveWorkDuration(
                 battleConfig.BaseWorkDurationSeconds,
@@ -68,6 +70,35 @@ namespace ClikerSlash.Battle
                 ResolvedWorkDurationSeconds = resolvedWorkDuration,
                 HasSnapshot = 0
             });
+            state.EntityManager.AddComponentData(configEntity, new WorkerProgressionStats
+            {
+                SessionDurationSeconds = resolvedWorkDuration,
+                MaxHandleWeight = resolvedProgression.MaxHandleWeight,
+                LaneMoveDurationSeconds = resolvedProgression.LaneMoveDurationSeconds,
+                TimingWindowHalfDepth = resolvedProgression.TimingWindowHalfDepth
+            });
+            state.EntityManager.AddComponentData(configEntity, new SessionRuleState
+            {
+                ActiveLaneCount = activeLaneCount,
+                PreviewCargoCount = resolvedProgression.PreviewCargoCount
+            });
+            state.EntityManager.AddComponentData(configEntity, new EconomyModifier
+            {
+                RewardMultiplier = resolvedProgression.RewardMultiplier,
+                PenaltyMultiplier = resolvedProgression.PenaltyMultiplier
+            });
+            state.EntityManager.AddComponentData(configEntity, new AutomationProfile
+            {
+                ReturnBeltChance = resolvedProgression.ReturnBeltChance,
+                HasWeightPreview = resolvedProgression.HasWeightPreview ? (byte)1 : (byte)0,
+                HasAssistArm = resolvedProgression.HasAssistArm ? (byte)1 : (byte)0
+            });
+            state.EntityManager.AddComponentData(configEntity, new SkillLoadoutState
+            {
+                SchemaVersion = resolvedProgression.SchemaVersion,
+                ResolvedLoadoutVersion = resolvedProgression.ResolvedLoadoutVersion,
+                UnlockedNodeCount = resolvedProgression.UnlockedNodeCount
+            });
             state.EntityManager.AddComponent<BattleRuntimeInitializedTag>(configEntity);
 
             var playerEntity = state.EntityManager.CreateEntity();
@@ -81,7 +112,7 @@ namespace ClikerSlash.Battle
                 IsMoving = 0
             });
             state.EntityManager.AddComponentData(playerEntity, new HandleState { BusyUntilTime = 0d });
-            state.EntityManager.AddComponentData(playerEntity, new MaxHandleWeight { Value = battleConfig.StartingMaxHandleWeight });
+            state.EntityManager.AddComponentData(playerEntity, new MaxHandleWeight { Value = resolvedProgression.MaxHandleWeight });
             state.EntityManager.AddComponentData(playerEntity, new ComboState { Current = 0, Max = 0 });
             state.EntityManager.AddComponentData(playerEntity, LocalTransform.FromPositionRotationScale(
                 new float3(playerX, playerConfig.Y, playerConfig.Z),

@@ -31,6 +31,13 @@ namespace ClikerSlash.Battle
             }
 
             var failLineZ = SystemAPI.GetSingleton<BattleConfig>().FailLineZ;
+            var economyModifier = SystemAPI.HasSingleton<EconomyModifier>()
+                ? SystemAPI.GetSingleton<EconomyModifier>()
+                : new EconomyModifier
+                {
+                    RewardMultiplier = 1f,
+                    PenaltyMultiplier = 1f
+                };
             var entityManager = state.EntityManager;
             var ecb = new EntityCommandBuffer(Allocator.Temp);
 
@@ -45,7 +52,10 @@ namespace ClikerSlash.Battle
                 }
 
                 var missedEvent = ecb.CreateEntity();
-                ecb.AddComponent(missedEvent, new CargoMissedEvent { Penalty = cargoPenalty.ValueRO.Value });
+                var adjustedPenalty = Unity.Mathematics.math.max(
+                    0,
+                    (int)Unity.Mathematics.math.round(cargoPenalty.ValueRO.Value * economyModifier.PenaltyMultiplier));
+                ecb.AddComponent(missedEvent, new CargoMissedEvent { Penalty = adjustedPenalty });
                 ecb.DestroyEntity(cargoEntity);
             }
 

@@ -13,6 +13,7 @@ namespace ClikerSlash.Battle
         [SerializeField] private PlayerAuthoring playerAuthoring;
         [SerializeField] private CargoAuthoring cargoAuthoring;
         [SerializeField] private LaneLayoutAuthoring laneLayoutAuthoring;
+        [SerializeField] private MetaProgressionCatalogAsset metaProgressionCatalog;
 
         private void Awake()
         {
@@ -49,6 +50,11 @@ namespace ClikerSlash.Battle
                 return;
             }
 
+            metaProgressionCatalog = MetaProgressionBootstrapBridge.ResolveCatalog(metaProgressionCatalog);
+            var runtimeState = MetaProgressionBootstrapBridge.EnsureRuntimeState(
+                metaProgressionCatalog,
+                laneLayoutAuthoring.LaneWorldXs.Count);
+
             var entityManager = world.EntityManager;
             DestroyExistingSingletons(entityManager, typeof(BattleConfig));
             DestroyExistingSingletons(entityManager, typeof(PlayerConfig));
@@ -60,19 +66,22 @@ namespace ClikerSlash.Battle
             DestroyEntities(entityManager, typeof(CargoMissedEvent));
 
             var battleEntity = entityManager.CreateEntity(typeof(BattleConfig));
-            entityManager.SetComponentData(battleEntity, new BattleConfig
-            {
-                BaseWorkDurationSeconds = battleConfigAuthoring.BaseWorkDurationSeconds,
-                HealthDurationBonusSeconds = battleConfigAuthoring.HealthDurationBonusSeconds,
-                PlayerMoveDuration = battleConfigAuthoring.PlayerMoveDuration,
-                HandleDurationSeconds = battleConfigAuthoring.HandleDurationSeconds,
-                SpawnInterval = battleConfigAuthoring.SpawnInterval,
-                CargoSpawnZ = battleConfigAuthoring.CargoSpawnZ,
-                JudgmentLineZ = battleConfigAuthoring.JudgmentLineZ,
-                FailLineZ = battleConfigAuthoring.FailLineZ,
-                HandleWindowHalfDepth = battleConfigAuthoring.HandleWindowHalfDepth,
-                StartingMaxHandleWeight = battleConfigAuthoring.StartingMaxHandleWeight
-            });
+            var battleConfig = MetaProgressionBootstrapBridge.ApplyToBattleConfig(
+                new BattleConfig
+                {
+                    BaseWorkDurationSeconds = battleConfigAuthoring.BaseWorkDurationSeconds,
+                    HealthDurationBonusSeconds = battleConfigAuthoring.HealthDurationBonusSeconds,
+                    PlayerMoveDuration = battleConfigAuthoring.PlayerMoveDuration,
+                    HandleDurationSeconds = battleConfigAuthoring.HandleDurationSeconds,
+                    SpawnInterval = battleConfigAuthoring.SpawnInterval,
+                    CargoSpawnZ = battleConfigAuthoring.CargoSpawnZ,
+                    JudgmentLineZ = battleConfigAuthoring.JudgmentLineZ,
+                    FailLineZ = battleConfigAuthoring.FailLineZ,
+                    HandleWindowHalfDepth = battleConfigAuthoring.HandleWindowHalfDepth,
+                    StartingMaxHandleWeight = battleConfigAuthoring.StartingMaxHandleWeight
+                },
+                runtimeState.resolvedProgression);
+            entityManager.SetComponentData(battleEntity, battleConfig);
 
             var playerEntity = entityManager.CreateEntity(typeof(PlayerConfig));
             entityManager.SetComponentData(playerEntity, new PlayerConfig

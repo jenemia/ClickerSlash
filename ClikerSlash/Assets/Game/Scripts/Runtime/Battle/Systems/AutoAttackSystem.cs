@@ -40,6 +40,13 @@ namespace ClikerSlash.Battle
             var moveState = SystemAPI.GetComponent<LaneMoveState>(playerEntity);
             var handleState = SystemAPI.GetComponentRW<HandleState>(playerEntity);
             var maxHandleWeight = SystemAPI.GetComponent<MaxHandleWeight>(playerEntity);
+            var economyModifier = SystemAPI.HasSingleton<EconomyModifier>()
+                ? SystemAPI.GetSingleton<EconomyModifier>()
+                : new EconomyModifier
+                {
+                    RewardMultiplier = 1f,
+                    PenaltyMultiplier = 1f
+                };
 
             if (moveState.IsMoving != 0 || handleState.ValueRO.BusyUntilTime > now)
             {
@@ -84,12 +91,14 @@ namespace ClikerSlash.Battle
             if (selectedWeight > maxHandleWeight.Value)
             {
                 var missedEvent = ecb.CreateEntity();
-                ecb.AddComponent(missedEvent, new CargoMissedEvent { Penalty = selectedPenalty });
+                var adjustedPenalty = math.max(0, (int)math.round(selectedPenalty * economyModifier.PenaltyMultiplier));
+                ecb.AddComponent(missedEvent, new CargoMissedEvent { Penalty = adjustedPenalty });
             }
             else
             {
                 var handledEvent = ecb.CreateEntity();
-                ecb.AddComponent(handledEvent, new CargoHandledEvent { Reward = selectedReward });
+                var adjustedReward = math.max(0, (int)math.round(selectedReward * economyModifier.RewardMultiplier));
+                ecb.AddComponent(handledEvent, new CargoHandledEvent { Reward = adjustedReward });
                 handleState.ValueRW.BusyUntilTime = now + battleConfig.HandleDurationSeconds;
             }
 

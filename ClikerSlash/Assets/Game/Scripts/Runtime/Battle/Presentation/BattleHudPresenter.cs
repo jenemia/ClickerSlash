@@ -53,6 +53,7 @@ namespace ClikerSlash.Battle
                 ComponentType.ReadOnly<MaxHandleWeight>(),
                 ComponentType.ReadOnly<ComboState>());
             using var laneQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<LaneLayout>());
+            using var sessionRuleQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<SessionRuleState>());
 
             if (battleQuery.IsEmptyIgnoreFilter || playerQuery.IsEmptyIgnoreFilter || laneQuery.IsEmptyIgnoreFilter)
             {
@@ -67,11 +68,14 @@ namespace ClikerSlash.Battle
             var maxHandleWeight = entityManager.GetComponentData<MaxHandleWeight>(playerEntity);
             var combo = entityManager.GetComponentData<ComboState>(playerEntity);
             var laneLayout = laneQuery.GetSingleton<LaneLayout>();
+            var activeLaneCount = sessionRuleQuery.IsEmptyIgnoreFilter
+                ? laneLayout.LaneCount
+                : entityManager.GetComponentData<SessionRuleState>(sessionRuleQuery.GetSingletonEntity()).ActiveLaneCount;
 
             infoText.text =
                 $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}";
             laneText.text =
-                $"Lane {lane.Value + 1} / {laneLayout.LaneCount}\nMax Weight {maxHandleWeight.Value}";
+                $"Lane {lane.Value + 1} / {activeLaneCount}\nMax Weight {maxHandleWeight.Value}";
 
             if (outcome.HasOutcome == 0)
             {

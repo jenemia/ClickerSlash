@@ -30,6 +30,12 @@ namespace ClikerSlash.Battle
             }
 
             var laneCount = SystemAPI.GetSingleton<LaneLayout>().LaneCount;
+            if (SystemAPI.HasSingleton<SessionRuleState>())
+            {
+                laneCount = Unity.Mathematics.math.min(
+                    laneCount,
+                    Unity.Mathematics.math.max(1, SystemAPI.GetSingleton<SessionRuleState>().ActiveLaneCount));
+            }
 
             foreach (var (moveState, laneIndex, moveCommands) in SystemAPI
                          .Query<RefRW<LaneMoveState>, RefRW<LaneIndex>, DynamicBuffer<LaneMoveCommandBufferElement>>()

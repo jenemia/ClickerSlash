@@ -13,12 +13,15 @@ namespace ClikerSlash.Battle
 
         public void LoadPrototypeBattle()
         {
+            PrototypeSessionRuntime.EnsureMetaProgressionInitialized(MetaProgressionCatalogAsset.LoadDefaultCatalog());
             PrototypeSceneNavigator.LoadBattleScene();
         }
 
         private void OnGUI()
         {
             EnsureStyles();
+            PrototypeSessionRuntime.EnsureMetaProgressionInitialized(MetaProgressionCatalogAsset.LoadDefaultCatalog());
+            var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
 
             var panelWidth = Mathf.Clamp(Screen.width * 0.34f, 460f, 620f);
             var panelHeight = Mathf.Clamp(Screen.height * 0.58f, 480f, 620f);
@@ -36,9 +39,11 @@ namespace ClikerSlash.Battle
             GUILayout.Label(
                 $"Next Work Duration: {PrototypeSessionRuntime.PreviewResolvedWorkDuration():0.0}s",
                 _bodyStyle);
+            GUILayout.Label($"Max Weight: {resolvedProgression.MaxHandleWeight}", _bodyStyle);
+            GUILayout.Label($"Active Lanes: {resolvedProgression.ActiveLaneCount}", _bodyStyle);
 
             GUILayout.Space(10f);
-            if (GUILayout.Button("Increase Health", _buttonStyle, GUILayout.Height(42f)))
+            if (GUILayout.Button("Increase Stamina", _buttonStyle, GUILayout.Height(42f)))
             {
                 PrototypeSessionRuntime.IncreaseHealthLevel();
             }
