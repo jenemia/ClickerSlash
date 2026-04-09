@@ -18,28 +18,26 @@ namespace ClikerSlash.Editor
     {
         private const string ScenePath = "Assets/Game/Scenes/PrototypeBattle.unity";
         private const string HubScenePath = "Assets/Game/Scenes/PrototypeHub.unity";
-        private const string WorkerPrefabPath = "Assets/Game/Prefabs/PlayerCube.prefab";
-        private const string CargoPrefabPath = "Assets/Game/Prefabs/CargoCube.prefab";
-        private const string WorkerMaterialPath = "Assets/Game/Materials/PlayerCube.mat";
-        private const string CargoMaterialPath = "Assets/Game/Materials/CargoCube.mat";
-        private const string LaneMaterialPath = "Assets/Game/Materials/LaneStrip.mat";
-        private const string AccentMaterialPath = "Assets/Game/Materials/LineAccent.mat";
+
         [MenuItem("Tools/ClikerSlash/Build Prototype Battle Scene")]
         public static void BuildPrototypeBattleScene()
         {
+            var assetLocator = BattleAssetEditorLocator.Instance;
+
             EnsureFolder("Assets/Game");
             EnsureFolder("Assets/Game/Scenes");
-            EnsureFolder("Assets/Game/Prefabs");
-            EnsureFolder("Assets/Game/Materials");
+            EnsureFolder(BattleAssetEditorLocator.RemoteRootPath);
+            EnsureFolder(BattleAssetEditorLocator.PrefabDirectoryPath);
+            EnsureFolder(BattleAssetEditorLocator.MaterialDirectoryPath);
             EnsureFolder("Assets/Game/UI");
 
-            var workerMaterial = GetOrCreateMaterial(WorkerMaterialPath, new Color(0.20f, 0.90f, 1.00f));
-            var cargoMaterial = GetOrCreateMaterial(CargoMaterialPath, new Color(1.00f, 0.55f, 0.20f));
-            var laneMaterial = GetOrCreateMaterial(LaneMaterialPath, new Color(0.10f, 0.14f, 0.22f));
-            var accentMaterial = GetOrCreateMaterial(AccentMaterialPath, new Color(0.95f, 0.75f, 0.10f));
+            var workerMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.PlayerMaterial, new Color(0.20f, 0.90f, 1.00f));
+            var cargoMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.CargoMaterial, new Color(1.00f, 0.55f, 0.20f));
+            var laneMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.LaneMaterial, new Color(0.10f, 0.14f, 0.22f));
+            var accentMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.AccentMaterial, new Color(0.95f, 0.75f, 0.10f));
 
-            var workerPrefab = GetOrCreateCubePrefab(WorkerPrefabPath, workerMaterial, new Vector3(1.1f, 1.1f, 1.1f));
-            var cargoPrefab = GetOrCreateCubePrefab(CargoPrefabPath, cargoMaterial, new Vector3(0.9f, 0.9f, 0.9f));
+            var workerPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.PlayerView, workerMaterial, new Vector3(1.1f, 1.1f, 1.1f));
+            var cargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.CargoView, cargoMaterial, new Vector3(0.9f, 0.9f, 0.9f));
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             scene.name = "PrototypeBattle";
@@ -417,9 +415,10 @@ namespace ClikerSlash.Editor
             return buttonObject;
         }
 
-        private static Material GetOrCreateMaterial(string assetPath, Color color)
+        private static Material GetOrCreateMaterial(BattleAssetEditorLocator assetLocator, string assetKey, Color color)
         {
-            var material = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+            var assetPath = assetLocator.GetEditorAssetPath(assetKey);
+            var material = assetLocator.LoadAsset<Material>(assetKey);
             if (material != null)
             {
                 material.color = color;
@@ -436,9 +435,14 @@ namespace ClikerSlash.Editor
             return material;
         }
 
-        private static GameObject GetOrCreateCubePrefab(string assetPath, Material material, Vector3 scale)
+        private static GameObject GetOrCreateCubePrefab(
+            BattleAssetEditorLocator assetLocator,
+            string assetKey,
+            Material material,
+            Vector3 scale)
         {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            var assetPath = assetLocator.GetEditorAssetPath(assetKey);
+            var prefab = assetLocator.LoadAsset<GameObject>(assetKey);
             if (prefab != null)
             {
                 return prefab;
