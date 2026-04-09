@@ -218,6 +218,58 @@ namespace ClikerSlash.Tests.PlayMode
             yield return null;
         }
 
+        /// <summary>
+        /// 상하차 해금 전에는 진입할 수 없고, 해금 후에는 진입/복귀 상태 계약이 순서대로 흘러야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockEntryAndReturnFollowRuntimeContract()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+
+            var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.HasLoadingDockAccess, Is.False);
+            Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.Lane));
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.None));
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.False);
+
+            SeedRuntimeCurrency(7);
+            for (var level = 0; level < 5; level += 1)
+            {
+                Assert.That(PrototypeSessionRuntime.TryUpgradeNode("management.performance_contract", catalog), Is.True);
+            }
+
+            Assert.That(PrototypeSessionRuntime.TryUpgradeNode(MetaProgressionCatalogAsset.LoadingDockUnlockNodeId, catalog), Is.True);
+
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.HasLoadingDockAccess, Is.True);
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.Lane));
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.EnteringLoadingDock));
+            Assert.That(dockState.HasPendingEntryRequest, Is.True);
+
+            PrototypeSessionRuntime.ConsumeLoadingDockEntryRequest();
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.LoadingDock));
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.ActiveInLoadingDock));
+            Assert.That(dockState.HasPendingEntryRequest, Is.False);
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.False);
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.HasPendingReturnRequest, Is.True);
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.ReturningToLane));
+
+            PrototypeSessionRuntime.ConsumeLoadingDockReturnRequest();
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.Lane));
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.None));
+            Assert.That(dockState.HasPendingReturnRequest, Is.False);
+            yield return null;
+        }
+
         private static IEnumerator LoadSceneAndWait(string sceneName)
         {
             SceneManager.LoadScene(sceneName);

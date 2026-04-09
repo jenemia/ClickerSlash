@@ -32,6 +32,10 @@ namespace ClikerSlash.Battle
         public static float ResolvedWorkDurationSeconds { get; private set; }
         // 참이면 허브에서 작업 현장으로 넘어가는 중이며, 전투 씬이 아직 요청을 소비하지 않은 상태입니다.
         public static bool HasPendingBattleEntryRequest { get; private set; }
+        private static WorkAreaType _currentWorkArea = WorkAreaType.Lane;
+        private static WorkAreaTransitionPhase _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
+        private static bool _hasPendingLoadingDockEntryRequest;
+        private static bool _hasPendingLoadingDockReturnRequest;
 
         private static MetaProgressionRuntimeState _metaProgressionRuntimeState;
 
@@ -96,6 +100,24 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
+        /// 현재 상하차 진입/복귀 계약 상태를 읽기 전용 스냅샷으로 반환합니다.
+        /// </summary>
+        public static LoadingDockRuntimeState GetLoadingDockRuntimeState(
+            MetaProgressionCatalogAsset catalog = null,
+            int physicalLaneCount = int.MaxValue)
+        {
+            EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
+            return new LoadingDockRuntimeState
+            {
+                HasLoadingDockAccess = _metaProgressionRuntimeState.resolvedProgression.HasLoadingDockAccess,
+                CurrentArea = _currentWorkArea,
+                TransitionPhase = _workAreaTransitionPhase,
+                HasPendingEntryRequest = _hasPendingLoadingDockEntryRequest,
+                HasPendingReturnRequest = _hasPendingLoadingDockReturnRequest
+            };
+        }
+
+        /// <summary>
         /// 다음 씬이 저장 데이터 없이도 읽을 수 있도록 마지막 작업 결과를 저장합니다.
         /// </summary>
         public static void StoreBattleResult(BattleResultSnapshot snapshot)
@@ -132,6 +154,10 @@ namespace ClikerSlash.Battle
             LastBattleResult = default;
             ResolvedWorkDurationSeconds = 0f;
             HasPendingBattleEntryRequest = false;
+            _currentWorkArea = WorkAreaType.Lane;
+            _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
+            _hasPendingLoadingDockEntryRequest = false;
+            _hasPendingLoadingDockReturnRequest = false;
             _metaProgressionRuntimeState = null;
         }
 
@@ -247,6 +273,73 @@ namespace ClikerSlash.Battle
         public static void ConsumeBattleEntryRequest()
         {
             HasPendingBattleEntryRequest = false;
+        }
+
+        /// <summary>
+        /// 상하차 오픈이 해금된 상태에서만 상하차 구역 진입 연출을 요청합니다.
+        /// </summary>
+        public static bool TryRequestLoadingDockEntry(
+            MetaProgressionCatalogAsset catalog,
+            int physicalLaneCount = int.MaxValue)
+        {
+            EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
+            if (!_metaProgressionRuntimeState.resolvedProgression.HasLoadingDockAccess ||
+                _currentWorkArea != WorkAreaType.Lane ||
+                _workAreaTransitionPhase != WorkAreaTransitionPhase.None)
+            {
+                return false;
+            }
+
+            _hasPendingLoadingDockEntryRequest = true;
+            _hasPendingLoadingDockReturnRequest = false;
+            _workAreaTransitionPhase = WorkAreaTransitionPhase.EnteringLoadingDock;
+            return true;
+        }
+
+        /// <summary>
+        /// 상하차 진입 연출이 끝났을 때 호출해 현재 작업 구역을 상하차로 확정합니다.
+        /// </summary>
+        public static void ConsumeLoadingDockEntryRequest()
+        {
+            if (!_hasPendingLoadingDockEntryRequest)
+            {
+                return;
+            }
+
+            _hasPendingLoadingDockEntryRequest = false;
+            _currentWorkArea = WorkAreaType.LoadingDock;
+            _workAreaTransitionPhase = WorkAreaTransitionPhase.ActiveInLoadingDock;
+        }
+
+        /// <summary>
+        /// 상하차 작업이 끝나면 레인으로 복귀하는 전환을 요청합니다.
+        /// </summary>
+        public static bool TryRequestLoadingDockReturn()
+        {
+            if (_currentWorkArea != WorkAreaType.LoadingDock ||
+                _workAreaTransitionPhase != WorkAreaTransitionPhase.ActiveInLoadingDock)
+            {
+                return false;
+            }
+
+            _hasPendingLoadingDockReturnRequest = true;
+            _workAreaTransitionPhase = WorkAreaTransitionPhase.ReturningToLane;
+            return true;
+        }
+
+        /// <summary>
+        /// 레인 복귀 연출이 끝났을 때 호출해 기본 작업 구역으로 상태를 정리합니다.
+        /// </summary>
+        public static void ConsumeLoadingDockReturnRequest()
+        {
+            if (!_hasPendingLoadingDockReturnRequest)
+            {
+                return;
+            }
+
+            _hasPendingLoadingDockReturnRequest = false;
+            _currentWorkArea = WorkAreaType.Lane;
+            _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
         }
 
         private static float CalculateWorkDuration(int healthLevel, float baseWorkDurationSeconds, float healthDurationBonusSeconds)
