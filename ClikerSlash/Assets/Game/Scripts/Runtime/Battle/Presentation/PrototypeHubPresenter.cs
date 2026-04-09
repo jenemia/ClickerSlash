@@ -283,6 +283,11 @@ namespace ClikerSlash.Battle
                 case SkillEffectType.AutomationUnlockFlag:
                     return $"{effect.targetKey} 해금";
 
+                case SkillEffectType.CenterUnlockFlag:
+                    return effect.targetKey == MetaProgressionCatalogAsset.LoadingDockUnlockFlag
+                        ? "상하차 구역 해금"
+                        : $"{effect.targetKey} 해금";
+
                 default:
                     return effect.effectType.ToString();
             }

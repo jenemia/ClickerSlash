@@ -274,5 +274,91 @@ namespace ClikerSlash.Tests.PlayMode
             Object.Destroy(viewportObject);
             yield return null;
         }
+
+        /// <summary>
+        /// 탭/브랜치 필드가 없던 레거시 카탈로그도 3탭 구조와 상하차 오픈 노드를 복원해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LegacyCatalogsNormalizeIntoThreeTabRuntimeFlow()
+        {
+            var legacyCatalog = ScriptableObject.CreateInstance<MetaProgressionCatalogAsset>();
+            legacyCatalog.schemaVersion = 1;
+            legacyCatalog.skillTabs = new System.Collections.Generic.List<SkillTreeTabDefinition>
+            {
+                new SkillTreeTabDefinition { tabId = SkillTreeTabId.Center, displayName = string.Empty, sortOrder = 99 }
+            };
+            legacyCatalog.skillBranches = new System.Collections.Generic.List<SkillBranchDefinition>
+            {
+                new SkillBranchDefinition { branchId = SkillBranchId.Vitality, displayName = "체력", sortOrder = 99 },
+                new SkillBranchDefinition { branchId = SkillBranchId.Strength, displayName = "근력", sortOrder = 99 },
+                new SkillBranchDefinition { branchId = SkillBranchId.Mobility, displayName = "이동", sortOrder = 99 },
+                new SkillBranchDefinition { branchId = SkillBranchId.Mastery, displayName = "숙련", sortOrder = 99 },
+                new SkillBranchDefinition { branchId = SkillBranchId.Management, displayName = "경영", sortOrder = 99 },
+                new SkillBranchDefinition { branchId = SkillBranchId.Automation, displayName = "자동화", sortOrder = 99 }
+            };
+            legacyCatalog.skillNodes = new System.Collections.Generic.List<SkillNodeDefinition>
+            {
+                new SkillNodeDefinition
+                {
+                    nodeId = "management.performance_contract",
+                    branchId = SkillBranchId.Management,
+                    displayName = "성과급 계약",
+                    tier = 1,
+                    maxLevel = 5,
+                    cost = 1,
+                    prerequisiteNodeIds = null,
+                    effects = null
+                },
+                new SkillNodeDefinition
+                {
+                    nodeId = MetaProgressionCatalogAsset.StarterVitalityNodeId,
+                    branchId = SkillBranchId.Vitality,
+                    displayName = "기초 체력 단련",
+                    tier = 1,
+                    maxLevel = 10,
+                    cost = 1,
+                    prerequisiteNodeIds = null,
+                    effects = null
+                }
+            };
+            legacyCatalog.startingProgression = new StartingProgressionDefinition
+            {
+                unlockedNodeStates = null,
+                selectedAutomationFlags = null,
+                resolvedLoadoutVersion = 0
+            };
+
+            legacyCatalog.EnsureDefaults();
+
+            Assert.That(legacyCatalog.skillTabs.Count, Is.EqualTo(3));
+            Assert.That(legacyCatalog.skillBranches.Count, Is.EqualTo(6));
+            Assert.That(legacyCatalog.TryGetBranchDefinition(SkillBranchId.Vitality, out var vitalityBranch), Is.True);
+            Assert.That(legacyCatalog.TryGetBranchDefinition(SkillBranchId.Management, out var managementBranch), Is.True);
+            Assert.That(vitalityBranch.tabId, Is.EqualTo(SkillTreeTabId.Human));
+            Assert.That(managementBranch.tabId, Is.EqualTo(SkillTreeTabId.Center));
+            Assert.That(vitalityBranch.sortOrder, Is.EqualTo(0));
+            Assert.That(managementBranch.sortOrder, Is.EqualTo(4));
+            Assert.That(legacyCatalog.TryGetNodeDefinition(MetaProgressionCatalogAsset.LoadingDockUnlockNodeId, out var loadingDockNode), Is.True);
+            Assert.That(loadingDockNode.effects, Is.Not.Empty);
+
+            var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(legacyCatalog);
+            for (var level = 0; level < 5; level += 1)
+            {
+                Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, legacyCatalog, "management.performance_contract"), Is.True);
+            }
+
+            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, legacyCatalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId), Is.True);
+            var loadingDockStatus = MetaProgressionCalculator.DescribeNode(snapshot, legacyCatalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId);
+            var vitalityStatus = MetaProgressionCalculator.DescribeNode(snapshot, legacyCatalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
+            var resolved = MetaProgressionCalculator.Resolve(snapshot, legacyCatalog, 5);
+
+            Assert.That(vitalityStatus.tabId, Is.EqualTo(SkillTreeTabId.Human));
+            Assert.That(loadingDockStatus.tabId, Is.EqualTo(SkillTreeTabId.Center));
+            Assert.That(loadingDockStatus.tabDisplayName, Is.EqualTo("물류 센터 성능"));
+            Assert.That(resolved.HasLoadingDockAccess, Is.True);
+
+            Object.Destroy(legacyCatalog);
+            yield return null;
+        }
     }
 }

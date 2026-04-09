@@ -366,24 +366,38 @@ namespace ClikerSlash.Battle
         {
             schemaVersion = Mathf.Max(DefaultSchemaVersion, schemaVersion);
             workerBaseStats ??= WorkerBaseStatsDefinition.CreateDefault();
-            skillTabs ??= CreateDefaultTabs();
-            skillBranches ??= CreateDefaultBranches();
-            skillNodes ??= CreateDefaultNodes();
+            skillTabs ??= new List<SkillTreeTabDefinition>();
+            skillBranches ??= new List<SkillBranchDefinition>();
+            skillNodes ??= new List<SkillNodeDefinition>();
             startingProgression ??= StartingProgressionDefinition.CreateDefault();
+            startingProgression.unlockedNodeStates ??= new List<UnlockedSkillNodeState>();
+            startingProgression.selectedAutomationFlags ??= new List<string>();
 
             if (skillTabs.Count == 0)
             {
                 skillTabs = CreateDefaultTabs();
+            }
+            else
+            {
+                NormalizeTabs(skillTabs);
             }
 
             if (skillBranches.Count == 0)
             {
                 skillBranches = CreateDefaultBranches();
             }
+            else
+            {
+                NormalizeBranches(skillBranches);
+            }
 
             if (skillNodes.Count == 0)
             {
                 skillNodes = CreateDefaultNodes();
+            }
+            else
+            {
+                NormalizeNodes(skillNodes);
             }
         }
 
@@ -537,6 +551,216 @@ namespace ClikerSlash.Battle
                     new List<string> { "automation.return_belt" },
                     UnlockFlagEffect(AssistArmFlag))
             };
+        }
+
+        private static void NormalizeTabs(List<SkillTreeTabDefinition> tabs)
+        {
+            if (tabs == null)
+            {
+                return;
+            }
+
+            var defaults = CreateDefaultTabs();
+            var normalizedTabs = new List<SkillTreeTabDefinition>(defaults.Count);
+            foreach (var defaultTab in defaults)
+            {
+                var existingTab = FindTabDefinition(tabs, defaultTab.tabId);
+                if (existingTab == null)
+                {
+                    normalizedTabs.Add(CloneTabDefinition(defaultTab));
+                    continue;
+                }
+
+                existingTab.sortOrder = defaultTab.sortOrder;
+                if (string.IsNullOrWhiteSpace(existingTab.displayName))
+                {
+                    existingTab.displayName = defaultTab.displayName;
+                }
+
+                normalizedTabs.Add(existingTab);
+            }
+
+            tabs.Clear();
+            tabs.AddRange(normalizedTabs);
+        }
+
+        private static void NormalizeBranches(List<SkillBranchDefinition> branches)
+        {
+            if (branches == null)
+            {
+                return;
+            }
+
+            var defaults = CreateDefaultBranches();
+            var normalizedBranches = new List<SkillBranchDefinition>(defaults.Count);
+            foreach (var defaultBranch in defaults)
+            {
+                var existingBranch = FindBranchDefinition(branches, defaultBranch.branchId);
+                if (existingBranch == null)
+                {
+                    normalizedBranches.Add(CloneBranchDefinition(defaultBranch));
+                    continue;
+                }
+
+                existingBranch.tabId = defaultBranch.tabId;
+                existingBranch.sortOrder = defaultBranch.sortOrder;
+                if (string.IsNullOrWhiteSpace(existingBranch.displayName))
+                {
+                    existingBranch.displayName = defaultBranch.displayName;
+                }
+
+                normalizedBranches.Add(existingBranch);
+            }
+
+            branches.Clear();
+            branches.AddRange(normalizedBranches);
+        }
+
+        private static void NormalizeNodes(List<SkillNodeDefinition> nodes)
+        {
+            if (nodes == null)
+            {
+                return;
+            }
+
+            foreach (var node in nodes)
+            {
+                if (node == null)
+                {
+                    continue;
+                }
+
+                node.prerequisiteNodeIds ??= new List<string>();
+                node.effects ??= new List<SkillEffectDefinition>();
+                if (string.IsNullOrWhiteSpace(node.displayName))
+                {
+                    node.displayName = node.nodeId;
+                }
+            }
+
+            foreach (var defaultNode in CreateDefaultNodes())
+            {
+                if (FindNodeDefinition(nodes, defaultNode.nodeId) != null)
+                {
+                    continue;
+                }
+
+                nodes.Add(CloneNodeDefinition(defaultNode));
+            }
+        }
+
+        private static SkillTreeTabDefinition FindTabDefinition(List<SkillTreeTabDefinition> tabs, SkillTreeTabId tabId)
+        {
+            if (tabs == null)
+            {
+                return null;
+            }
+
+            foreach (var tab in tabs)
+            {
+                if (tab != null && tab.tabId == tabId)
+                {
+                    return tab;
+                }
+            }
+
+            return null;
+        }
+
+        private static SkillBranchDefinition FindBranchDefinition(List<SkillBranchDefinition> branches, SkillBranchId branchId)
+        {
+            if (branches == null)
+            {
+                return null;
+            }
+
+            foreach (var branch in branches)
+            {
+                if (branch != null && branch.branchId == branchId)
+                {
+                    return branch;
+                }
+            }
+
+            return null;
+        }
+
+        private static SkillNodeDefinition FindNodeDefinition(List<SkillNodeDefinition> nodes, string nodeId)
+        {
+            if (nodes == null)
+            {
+                return null;
+            }
+
+            foreach (var node in nodes)
+            {
+                if (node != null && string.Equals(node.nodeId, nodeId, StringComparison.Ordinal))
+                {
+                    return node;
+                }
+            }
+
+            return null;
+        }
+
+        private static SkillTreeTabDefinition CloneTabDefinition(SkillTreeTabDefinition source)
+        {
+            return new SkillTreeTabDefinition
+            {
+                tabId = source.tabId,
+                displayName = source.displayName,
+                sortOrder = source.sortOrder
+            };
+        }
+
+        private static SkillBranchDefinition CloneBranchDefinition(SkillBranchDefinition source)
+        {
+            return new SkillBranchDefinition
+            {
+                tabId = source.tabId,
+                branchId = source.branchId,
+                displayName = source.displayName,
+                sortOrder = source.sortOrder
+            };
+        }
+
+        private static SkillNodeDefinition CloneNodeDefinition(SkillNodeDefinition source)
+        {
+            var clone = new SkillNodeDefinition
+            {
+                nodeId = source.nodeId,
+                branchId = source.branchId,
+                displayName = source.displayName,
+                tier = source.tier,
+                maxLevel = source.maxLevel,
+                cost = source.cost,
+                prerequisiteNodeIds = new List<string>(source.prerequisiteNodeIds ?? new List<string>()),
+                effects = new List<SkillEffectDefinition>()
+            };
+
+            if (source.effects == null)
+            {
+                return clone;
+            }
+
+            foreach (var effect in source.effects)
+            {
+                if (effect == null)
+                {
+                    continue;
+                }
+
+                clone.effects.Add(new SkillEffectDefinition
+                {
+                    effectType = effect.effectType,
+                    operation = effect.operation,
+                    intValue = effect.intValue,
+                    floatValue = effect.floatValue,
+                    targetKey = effect.targetKey
+                });
+            }
+
+            return clone;
         }
 
         private static SkillNodeDefinition CreateNode(
