@@ -312,6 +312,28 @@ namespace ClikerSlash.Tests.PlayMode
             Object.Destroy(bridgeObject);
         }
 
+        /// <summary>
+        /// 전투 씬은 적재장과 차량 구역이 분리된 상하차 블록아웃 루트를 포함해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BattleSceneContainsLoadingDockEnvironmentBlockout()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var loadingDockEnvironment = Object.FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            Assert.That(loadingDockEnvironment, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.cargoBayRoot, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.truckBayRoot, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.cargoThrowOrigin, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.truckDropZone, Is.Not.Null);
+            Assert.That(
+                Vector3.Distance(
+                    loadingDockEnvironment.cargoBayRoot.position,
+                    loadingDockEnvironment.truckBayRoot.position),
+                Is.GreaterThan(6f));
+        }
+
         private static IEnumerator LoadSceneAndWait(string sceneName)
         {
             SceneManager.LoadScene(sceneName);

@@ -46,6 +46,7 @@ namespace ClikerSlash.Editor
             CreateCamera(battleView);
             CreateLight();
             var laneRoot = CreateLaneVisualRoot(battleView, laneMaterial, accentMaterial);
+            CreateLoadingDockEnvironment(battleView, laneMaterial, accentMaterial, cargoMaterial, workerMaterial);
             CreateConfigRoots(battleView, laneRoot);
             CreatePresentationRoot(workerPrefab, cargoPrefab);
             CreateHudRoot();
@@ -156,6 +157,97 @@ namespace ClikerSlash.Editor
             line.transform.localScale = scale;
             ApplyMaterial(line, material);
             Object.DestroyImmediate(line.GetComponent<Collider>());
+        }
+
+        private static void CreateLoadingDockEnvironment(
+            BattleViewAuthoring battleView,
+            Material floorMaterial,
+            Material accentMaterial,
+            Material cargoMaterial,
+            Material workerMaterial)
+        {
+            var root = new GameObject("LoadingDockEnvironmentRoot");
+            root.transform.position = new Vector3(18f, 0f, battleView.LaneCenterZ + 1.5f);
+            var authoring = root.AddComponent<LoadingDockEnvironmentAuthoring>();
+
+            var dockFloor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            dockFloor.name = "DockFloor";
+            dockFloor.transform.SetParent(root.transform, false);
+            dockFloor.transform.localPosition = Vector3.zero;
+            dockFloor.transform.localScale = new Vector3(18f, 0.08f, 12f);
+            ApplyMaterial(dockFloor, floorMaterial);
+            Object.DestroyImmediate(dockFloor.GetComponent<Collider>());
+
+            var divider = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            divider.name = "ZoneDivider";
+            divider.transform.SetParent(root.transform, false);
+            divider.transform.localPosition = new Vector3(0f, 0.12f, 0f);
+            divider.transform.localScale = new Vector3(0.28f, 0.06f, 11f);
+            ApplyMaterial(divider, accentMaterial);
+            Object.DestroyImmediate(divider.GetComponent<Collider>());
+
+            var cargoBayRoot = new GameObject("CargoBayRoot");
+            cargoBayRoot.transform.SetParent(root.transform, false);
+            cargoBayRoot.transform.localPosition = new Vector3(-5f, 0f, -1.8f);
+            authoring.cargoBayRoot = cargoBayRoot.transform;
+
+            var cargoPad = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cargoPad.name = "CargoBayPad";
+            cargoPad.transform.SetParent(cargoBayRoot.transform, false);
+            cargoPad.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+            cargoPad.transform.localScale = new Vector3(7f, 0.1f, 7f);
+            ApplyMaterial(cargoPad, accentMaterial);
+            Object.DestroyImmediate(cargoPad.GetComponent<Collider>());
+
+            for (var stackIndex = 0; stackIndex < 6; stackIndex += 1)
+            {
+                var stackCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                stackCube.name = $"CargoStack_{stackIndex + 1}";
+                stackCube.transform.SetParent(cargoBayRoot.transform, false);
+                stackCube.transform.localPosition = new Vector3(-2f + (stackIndex % 3) * 2f, 0.55f + (stackIndex / 3) * 1.05f, -1.2f + (stackIndex % 2) * 2.4f);
+                stackCube.transform.localScale = new Vector3(1.4f, 1f, 1.4f);
+                ApplyMaterial(stackCube, cargoMaterial);
+                Object.DestroyImmediate(stackCube.GetComponent<Collider>());
+            }
+
+            var cargoThrowOrigin = new GameObject("CargoThrowOrigin");
+            cargoThrowOrigin.transform.SetParent(cargoBayRoot.transform, false);
+            cargoThrowOrigin.transform.localPosition = new Vector3(2.4f, 1f, 2.2f);
+            authoring.cargoThrowOrigin = cargoThrowOrigin.transform;
+
+            var truckBayRoot = new GameObject("TruckBayRoot");
+            truckBayRoot.transform.SetParent(root.transform, false);
+            truckBayRoot.transform.localPosition = new Vector3(5f, 0f, 1.8f);
+            authoring.truckBayRoot = truckBayRoot.transform;
+
+            var truckPad = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            truckPad.name = "TruckPad";
+            truckPad.transform.SetParent(truckBayRoot.transform, false);
+            truckPad.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+            truckPad.transform.localScale = new Vector3(7.5f, 0.1f, 7f);
+            ApplyMaterial(truckPad, accentMaterial);
+            Object.DestroyImmediate(truckPad.GetComponent<Collider>());
+
+            var truckBody = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            truckBody.name = "TruckBody";
+            truckBody.transform.SetParent(truckBayRoot.transform, false);
+            truckBody.transform.localPosition = new Vector3(0f, 1.1f, 0.2f);
+            truckBody.transform.localScale = new Vector3(5.5f, 2f, 3.2f);
+            ApplyMaterial(truckBody, workerMaterial);
+            Object.DestroyImmediate(truckBody.GetComponent<Collider>());
+
+            var truckCab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            truckCab.name = "TruckCab";
+            truckCab.transform.SetParent(truckBayRoot.transform, false);
+            truckCab.transform.localPosition = new Vector3(2.5f, 0.95f, -1.1f);
+            truckCab.transform.localScale = new Vector3(2f, 1.7f, 1.5f);
+            ApplyMaterial(truckCab, workerMaterial);
+            Object.DestroyImmediate(truckCab.GetComponent<Collider>());
+
+            var truckDropZone = new GameObject("TruckDropZone");
+            truckDropZone.transform.SetParent(truckBayRoot.transform, false);
+            truckDropZone.transform.localPosition = new Vector3(-1.4f, 1.2f, 0.8f);
+            authoring.truckDropZone = truckDropZone.transform;
         }
 
         private static void CreateConfigRoots(BattleViewAuthoring battleView, GameObject laneRoot)
