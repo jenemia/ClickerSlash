@@ -1,0 +1,87 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a87d6aa059210412ba754ed543fc2db1, type: 3}
+  m_Name: HumanMetaProgressionTree
+  m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.MetaProgressionTreeAsset
+  tabId: 1
+  displayName: "\uC0AC\uB78C \uC131\uB2A5"
+  sortOrder: 1
+  branches:
+  - tabId: 1
+    branchId: 0
+    displayName: "\uCCB4\uB825"
+    sortOrder: 0
+  - tabId: 1
+    branchId: 1
+    displayName: "\uADFC\uB825"
+    sortOrder: 1
+  - tabId: 1
+    branchId: 2
+    displayName: "\uC774\uB3D9"
+    sortOrder: 2
+  - tabId: 1
+    branchId: 3
+    displayName: "\uC219\uB828"
+    sortOrder: 3
+  nodes:
+  - nodeId: vitality.basic_stamina_training
+    branchId: 0
+    displayName: "\uAE30\uCD08 \uCCB4\uB825 \uB2E8\uB828"
+    tier: 1
+    maxLevel: 10
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 0
+      operation: 0
+      intValue: 10
+      floatValue: 10
+      targetKey: 
+  - nodeId: strength.basic_strength_training
+    branchId: 1
+    displayName: "\uAE30\uCD08 \uADFC\uB825 \uD6C8\uB828"
+    tier: 1
+    maxLevel: 10
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 1
+      operation: 0
+      intValue: 2
+      floatValue: 2
+      targetKey: 
+  - nodeId: mobility.footwork_training
+    branchId: 2
+    displayName: "\uBC1C\uB180\uB9BC \uAC15\uD654"
+    tier: 1
+    maxLevel: 5
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 2
+      operation: 1
+      intValue: 1
+      floatValue: 0.9
+      targetKey: 
+  - nodeId: mastery.work_sense_training
+    branchId: 3
+    displayName: "\uC791\uC5C5 \uAC10\uAC01 \uD5A5\uC0C1"
+    tier: 1
+    maxLevel: 5
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 3
+      operation: 0
+      intValue: 0
+      floatValue: 0.05
+      targetKey: 

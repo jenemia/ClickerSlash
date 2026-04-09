@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace ClikerSlash.Battle
 {
@@ -243,9 +244,17 @@ namespace ClikerSlash.Battle
         {
             return new StartingProgressionDefinition
             {
-                unlockedNodeStates = new List<UnlockedSkillNodeState>(),
+                unlockedNodeStates = new List<UnlockedSkillNodeState>
+                {
+                    new UnlockedSkillNodeState
+                    {
+                        nodeId = MetaProgressionCatalogAsset.LoadingDockUnlockNodeId,
+                        level = 1,
+                        isUnlocked = true
+                    },
+                },
                 selectedAutomationFlags = new List<string>(),
-                resolvedLoadoutVersion = 0
+                resolvedLoadoutVersion = 1
             };
         }
     }
@@ -271,10 +280,66 @@ namespace ClikerSlash.Battle
 
         [Min(1)] public int schemaVersion = DefaultSchemaVersion;
         public WorkerBaseStatsDefinition workerBaseStats = WorkerBaseStatsDefinition.CreateDefault();
-        public List<SkillTreeTabDefinition> skillTabs = new List<SkillTreeTabDefinition>();
-        public List<SkillBranchDefinition> skillBranches = new List<SkillBranchDefinition>();
-        public List<SkillNodeDefinition> skillNodes = new List<SkillNodeDefinition>();
+        public MetaProgressionTreeAsset centerTree;
+        public MetaProgressionTreeAsset humanTree;
+        public MetaProgressionTreeAsset robotTree;
         public StartingProgressionDefinition startingProgression = StartingProgressionDefinition.CreateDefault();
+
+        [FormerlySerializedAs("skillTabs")]
+        [SerializeField] private List<SkillTreeTabDefinition> legacySkillTabs = new List<SkillTreeTabDefinition>();
+
+        [FormerlySerializedAs("skillBranches")]
+        [SerializeField] private List<SkillBranchDefinition> legacySkillBranches = new List<SkillBranchDefinition>();
+
+        [FormerlySerializedAs("skillNodes")]
+        [SerializeField] private List<SkillNodeDefinition> legacySkillNodes = new List<SkillNodeDefinition>();
+
+        [NonSerialized] private readonly List<SkillTreeTabDefinition> mergedSkillTabs = new List<SkillTreeTabDefinition>();
+        [NonSerialized] private readonly List<SkillBranchDefinition> mergedSkillBranches = new List<SkillBranchDefinition>();
+        [NonSerialized] private readonly List<SkillNodeDefinition> mergedSkillNodes = new List<SkillNodeDefinition>();
+        [NonSerialized] private bool mergedCachesDirty = true;
+
+        public List<SkillTreeTabDefinition> skillTabs
+        {
+            get
+            {
+                EnsureDefaults();
+                return mergedSkillTabs;
+            }
+            set
+            {
+                legacySkillTabs = value ?? new List<SkillTreeTabDefinition>();
+                InvalidateMergedCaches();
+            }
+        }
+
+        public List<SkillBranchDefinition> skillBranches
+        {
+            get
+            {
+                EnsureDefaults();
+                return mergedSkillBranches;
+            }
+            set
+            {
+                legacySkillBranches = value ?? new List<SkillBranchDefinition>();
+                InvalidateMergedCaches();
+            }
+        }
+
+        public List<SkillNodeDefinition> skillNodes
+        {
+            get
+            {
+                EnsureDefaults();
+                return mergedSkillNodes;
+            }
+            set
+            {
+                legacySkillNodes = value ?? new List<SkillNodeDefinition>();
+                InvalidateMergedCaches();
+            }
+        }
 
         /// <summary>
         /// 리소스 기본 카탈로그를 읽고, 없으면 메모리 기본값 인스턴스를 생성합니다.
@@ -308,7 +373,7 @@ namespace ClikerSlash.Battle
         public bool TryGetNodeDefinition(string nodeId, out SkillNodeDefinition nodeDefinition)
         {
             EnsureDefaults();
-            foreach (var node in skillNodes)
+            foreach (var node in mergedSkillNodes)
             {
                 if (node != null && string.Equals(node.nodeId, nodeId, StringComparison.Ordinal))
                 {
@@ -327,7 +392,7 @@ namespace ClikerSlash.Battle
         public bool TryGetBranchDefinition(SkillBranchId branchId, out SkillBranchDefinition branchDefinition)
         {
             EnsureDefaults();
-            foreach (var branch in skillBranches)
+            foreach (var branch in mergedSkillBranches)
             {
                 if (branch != null && branch.branchId == branchId)
                 {
@@ -346,7 +411,7 @@ namespace ClikerSlash.Battle
         public bool TryGetTabDefinition(SkillTreeTabId tabId, out SkillTreeTabDefinition tabDefinition)
         {
             EnsureDefaults();
-            foreach (var tab in skillTabs)
+            foreach (var tab in mergedSkillTabs)
             {
                 if (tab != null && tab.tabId == tabId)
                 {
@@ -366,39 +431,19 @@ namespace ClikerSlash.Battle
         {
             schemaVersion = Mathf.Max(DefaultSchemaVersion, schemaVersion);
             workerBaseStats ??= WorkerBaseStatsDefinition.CreateDefault();
-            skillTabs ??= new List<SkillTreeTabDefinition>();
-            skillBranches ??= new List<SkillBranchDefinition>();
-            skillNodes ??= new List<SkillNodeDefinition>();
+            legacySkillTabs ??= new List<SkillTreeTabDefinition>();
+            legacySkillBranches ??= new List<SkillBranchDefinition>();
+            legacySkillNodes ??= new List<SkillNodeDefinition>();
             startingProgression ??= StartingProgressionDefinition.CreateDefault();
             startingProgression.unlockedNodeStates ??= new List<UnlockedSkillNodeState>();
             startingProgression.selectedAutomationFlags ??= new List<string>();
-
-            if (skillTabs.Count == 0)
+            NormalizeStartingProgression(startingProgression);
+            if (!mergedCachesDirty && mergedSkillTabs.Count > 0 && mergedSkillBranches.Count > 0 && mergedSkillNodes.Count > 0)
             {
-                skillTabs = CreateDefaultTabs();
-            }
-            else
-            {
-                NormalizeTabs(skillTabs);
+                return;
             }
 
-            if (skillBranches.Count == 0)
-            {
-                skillBranches = CreateDefaultBranches();
-            }
-            else
-            {
-                NormalizeBranches(skillBranches);
-            }
-
-            if (skillNodes.Count == 0)
-            {
-                skillNodes = CreateDefaultNodes();
-            }
-            else
-            {
-                NormalizeNodes(skillNodes);
-            }
+            RebuildMergedCaches();
         }
 
         /// <summary>
@@ -409,13 +454,35 @@ namespace ClikerSlash.Battle
         {
             schemaVersion = DefaultSchemaVersion;
             workerBaseStats = WorkerBaseStatsDefinition.CreateDefault();
-            skillTabs = CreateDefaultTabs();
-            skillBranches = CreateDefaultBranches();
-            skillNodes = CreateDefaultNodes();
             startingProgression = StartingProgressionDefinition.CreateDefault();
+            legacySkillTabs = new List<SkillTreeTabDefinition>();
+            legacySkillBranches = new List<SkillBranchDefinition>();
+            legacySkillNodes = new List<SkillNodeDefinition>();
+            centerTree = ResetOrCreateTree(centerTree, SkillTreeTabId.Center);
+            humanTree = ResetOrCreateTree(humanTree, SkillTreeTabId.Human);
+            robotTree = ResetOrCreateTree(robotTree, SkillTreeTabId.Robot);
+            RebuildMergedCaches();
         }
 
-        private static List<SkillTreeTabDefinition> CreateDefaultTabs()
+        internal static SkillTreeTabDefinition CreateDefaultTabDefinition(SkillTreeTabId tabId)
+        {
+            foreach (var tab in CreateDefaultTabs())
+            {
+                if (tab.tabId == tabId)
+                {
+                    return CloneTabDefinition(tab);
+                }
+            }
+
+            return new SkillTreeTabDefinition
+            {
+                tabId = tabId,
+                displayName = tabId.ToString(),
+                sortOrder = 0
+            };
+        }
+
+        internal static List<SkillTreeTabDefinition> CreateDefaultTabs()
         {
             return new List<SkillTreeTabDefinition>
             {
@@ -425,7 +492,186 @@ namespace ClikerSlash.Battle
             };
         }
 
-        private static List<SkillBranchDefinition> CreateDefaultBranches()
+        private IEnumerable<MetaProgressionTreeAsset> ResolveActiveTrees()
+        {
+            if (centerTree != null || humanTree != null || robotTree != null)
+            {
+                centerTree ??= CreateRuntimeTreeAssetFromLegacy(SkillTreeTabId.Center);
+                humanTree ??= CreateRuntimeTreeAssetFromLegacy(SkillTreeTabId.Human);
+                robotTree ??= CreateRuntimeTreeAssetFromLegacy(SkillTreeTabId.Robot);
+
+                yield return centerTree;
+                yield return humanTree;
+                yield return robotTree;
+                yield break;
+            }
+
+            yield return CreateRuntimeTreeAssetFromLegacy(SkillTreeTabId.Center);
+            yield return CreateRuntimeTreeAssetFromLegacy(SkillTreeTabId.Human);
+            yield return CreateRuntimeTreeAssetFromLegacy(SkillTreeTabId.Robot);
+        }
+
+        private MetaProgressionTreeAsset CreateRuntimeTreeAssetFromLegacy(SkillTreeTabId tabId)
+        {
+            var tree = CreateRuntimeTreeAsset(tabId);
+            var legacyTab = FindTabDefinition(legacySkillTabs, tabId);
+            if (legacyTab != null)
+            {
+                tree.displayName = string.IsNullOrWhiteSpace(legacyTab.displayName)
+                    ? tree.displayName
+                    : legacyTab.displayName;
+                tree.sortOrder = legacyTab.sortOrder;
+            }
+
+            tree.branches = ExtractLegacyBranchesForTab(tabId);
+            tree.nodes = ExtractLegacyNodesForTab(tabId);
+            tree.EnsureDefaults();
+            return tree;
+        }
+
+        private List<SkillBranchDefinition> ExtractLegacyBranchesForTab(SkillTreeTabId tabId)
+        {
+            var branches = new List<SkillBranchDefinition>();
+            foreach (var branch in legacySkillBranches)
+            {
+                if (branch == null)
+                {
+                    continue;
+                }
+
+                if (ResolveTabIdForBranch(branch.branchId) != tabId)
+                {
+                    continue;
+                }
+
+                branches.Add(CloneBranchDefinition(branch));
+            }
+
+            return branches;
+        }
+
+        private List<SkillNodeDefinition> ExtractLegacyNodesForTab(SkillTreeTabId tabId)
+        {
+            var allowedBranchIds = new HashSet<SkillBranchId>();
+            foreach (var branch in CreateDefaultBranchesForTab(tabId))
+            {
+                allowedBranchIds.Add(branch.branchId);
+            }
+
+            var nodes = new List<SkillNodeDefinition>();
+            foreach (var node in legacySkillNodes)
+            {
+                if (node != null && allowedBranchIds.Contains(node.branchId))
+                {
+                    nodes.Add(CloneNodeDefinition(node));
+                }
+            }
+
+            return nodes;
+        }
+
+        private static MetaProgressionTreeAsset CreateRuntimeTreeAsset(SkillTreeTabId tabId)
+        {
+            var tree = CreateInstance<MetaProgressionTreeAsset>();
+            tree.name = tabId + "MetaProgressionTree(Runtime)";
+            tree.tabId = tabId;
+            tree.ResetToLogisticsDefaults();
+            return tree;
+        }
+
+        private static MetaProgressionTreeAsset ResetOrCreateTree(MetaProgressionTreeAsset tree, SkillTreeTabId tabId)
+        {
+            tree ??= CreateRuntimeTreeAsset(tabId);
+            tree.tabId = tabId;
+            tree.ResetToLogisticsDefaults();
+            return tree;
+        }
+
+        private void RebuildMergedCaches()
+        {
+            mergedSkillTabs.Clear();
+            mergedSkillBranches.Clear();
+            mergedSkillNodes.Clear();
+
+            var tabs = new List<SkillTreeTabDefinition>();
+            foreach (var tree in ResolveActiveTrees())
+            {
+                if (tree == null)
+                {
+                    continue;
+                }
+
+                tree.EnsureDefaults();
+                tabs.Add(new SkillTreeTabDefinition
+                {
+                    tabId = tree.tabId,
+                    displayName = tree.displayName,
+                    sortOrder = tree.sortOrder
+                });
+
+                foreach (var branch in tree.branches)
+                {
+                    if (branch != null)
+                    {
+                        mergedSkillBranches.Add(CloneBranchDefinition(branch));
+                    }
+                }
+
+                foreach (var node in tree.nodes)
+                {
+                    if (node != null)
+                    {
+                        mergedSkillNodes.Add(CloneNodeDefinition(node));
+                    }
+                }
+            }
+
+            NormalizeTabs(tabs);
+            mergedSkillTabs.AddRange(tabs);
+            mergedSkillBranches.Sort((left, right) => left.sortOrder.CompareTo(right.sortOrder));
+            mergedSkillNodes.Sort(CompareNodes);
+            mergedCachesDirty = false;
+        }
+
+        private void InvalidateMergedCaches()
+        {
+            mergedSkillTabs.Clear();
+            mergedSkillBranches.Clear();
+            mergedSkillNodes.Clear();
+            mergedCachesDirty = true;
+        }
+
+        private static void NormalizeStartingProgression(StartingProgressionDefinition startingProgression)
+        {
+            if (startingProgression == null)
+            {
+                return;
+            }
+
+            if (FindUnlockedNodeState(startingProgression.unlockedNodeStates, LoadingDockUnlockNodeId) == null)
+            {
+                startingProgression.unlockedNodeStates.Add(new UnlockedSkillNodeState
+                {
+                    nodeId = LoadingDockUnlockNodeId,
+                    level = 1,
+                    isUnlocked = true
+                });
+            }
+
+            startingProgression.resolvedLoadoutVersion = Mathf.Max(1, startingProgression.resolvedLoadoutVersion);
+        }
+
+        private static SkillTreeTabId ResolveTabIdForBranch(SkillBranchId branchId)
+        {
+            return branchId switch
+            {
+                SkillBranchId.Management => SkillTreeTabId.Center,
+                SkillBranchId.Automation => SkillTreeTabId.Robot,
+                _ => SkillTreeTabId.Human
+            };
+        }
+
+        internal static List<SkillBranchDefinition> CreateDefaultBranches()
         {
             return new List<SkillBranchDefinition>
             {
@@ -438,7 +684,21 @@ namespace ClikerSlash.Battle
             };
         }
 
-        private static List<SkillNodeDefinition> CreateDefaultNodes()
+        internal static List<SkillBranchDefinition> CreateDefaultBranchesForTab(SkillTreeTabId tabId)
+        {
+            var branchesForTab = new List<SkillBranchDefinition>();
+            foreach (var branch in CreateDefaultBranches())
+            {
+                if (branch.tabId == tabId)
+                {
+                    branchesForTab.Add(CloneBranchDefinition(branch));
+                }
+            }
+
+            return branchesForTab;
+        }
+
+        internal static List<SkillNodeDefinition> CreateDefaultNodes()
         {
             return new List<SkillNodeDefinition>
             {
@@ -553,6 +813,26 @@ namespace ClikerSlash.Battle
             };
         }
 
+        internal static List<SkillNodeDefinition> CreateDefaultNodesForTab(SkillTreeTabId tabId)
+        {
+            var branchIdsForTab = new HashSet<SkillBranchId>();
+            foreach (var branch in CreateDefaultBranchesForTab(tabId))
+            {
+                branchIdsForTab.Add(branch.branchId);
+            }
+
+            var nodesForTab = new List<SkillNodeDefinition>();
+            foreach (var node in CreateDefaultNodes())
+            {
+                if (branchIdsForTab.Contains(node.branchId))
+                {
+                    nodesForTab.Add(CloneNodeDefinition(node));
+                }
+            }
+
+            return nodesForTab;
+        }
+
         private static void NormalizeTabs(List<SkillTreeTabDefinition> tabs)
         {
             if (tabs == null)
@@ -584,14 +864,16 @@ namespace ClikerSlash.Battle
             tabs.AddRange(normalizedTabs);
         }
 
-        private static void NormalizeBranches(List<SkillBranchDefinition> branches)
+        internal static void NormalizeTreeBranches(
+            SkillTreeTabId tabId,
+            List<SkillBranchDefinition> branches,
+            List<SkillBranchDefinition> defaults)
         {
             if (branches == null)
             {
                 return;
             }
 
-            var defaults = CreateDefaultBranches();
             var normalizedBranches = new List<SkillBranchDefinition>(defaults.Count);
             foreach (var defaultBranch in defaults)
             {
@@ -616,7 +898,7 @@ namespace ClikerSlash.Battle
             branches.AddRange(normalizedBranches);
         }
 
-        private static void NormalizeNodes(List<SkillNodeDefinition> nodes)
+        internal static void NormalizeTreeNodes(List<SkillNodeDefinition> nodes, List<SkillNodeDefinition> defaults)
         {
             if (nodes == null)
             {
@@ -638,7 +920,7 @@ namespace ClikerSlash.Battle
                 }
             }
 
-            foreach (var defaultNode in CreateDefaultNodes())
+            foreach (var defaultNode in defaults)
             {
                 if (FindNodeDefinition(nodes, defaultNode.nodeId) != null)
                 {
@@ -701,6 +983,65 @@ namespace ClikerSlash.Battle
             }
 
             return null;
+        }
+
+        private static UnlockedSkillNodeState FindUnlockedNodeState(List<UnlockedSkillNodeState> unlockedStates, string nodeId)
+        {
+            if (unlockedStates == null)
+            {
+                return null;
+            }
+
+            foreach (var unlockedState in unlockedStates)
+            {
+                if (unlockedState != null && string.Equals(unlockedState.nodeId, nodeId, StringComparison.Ordinal))
+                {
+                    return unlockedState;
+                }
+            }
+
+            return null;
+        }
+
+        private static int CompareNodes(SkillNodeDefinition left, SkillNodeDefinition right)
+        {
+            if (left == null && right == null)
+            {
+                return 0;
+            }
+
+            if (left == null)
+            {
+                return 1;
+            }
+
+            if (right == null)
+            {
+                return -1;
+            }
+
+            if (left.branchId != right.branchId)
+            {
+                if (FindBranchDefinition(CreateDefaultBranches(), left.branchId) is { } leftBranch &&
+                    FindBranchDefinition(CreateDefaultBranches(), right.branchId) is { } rightBranch)
+                {
+                    var branchCompare = leftBranch.sortOrder.CompareTo(rightBranch.sortOrder);
+                    if (branchCompare != 0)
+                    {
+                        return branchCompare;
+                    }
+                }
+
+                return left.branchId.CompareTo(right.branchId);
+            }
+
+            var tierCompare = left.tier.CompareTo(right.tier);
+            if (tierCompare != 0)
+            {
+                return tierCompare;
+            }
+
+            return string.Compare(left.displayName, right.displayName, StringComparison.Ordinal);
         }
 
         private static SkillTreeTabDefinition CloneTabDefinition(SkillTreeTabDefinition source)

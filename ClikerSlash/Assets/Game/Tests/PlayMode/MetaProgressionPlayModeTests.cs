@@ -25,11 +25,21 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(snapshot.currency.currentBalance, Is.Zero);
             Assert.That(snapshot.currency.totalBattleEarned, Is.Zero);
             Assert.That(snapshot.currency.totalSkillSpent, Is.Zero);
+            Assert.That(catalog.centerTree, Is.Not.Null);
+            Assert.That(catalog.humanTree, Is.Not.Null);
+            Assert.That(catalog.robotTree, Is.Not.Null);
             Assert.That(catalog.skillTabs.Count, Is.EqualTo(3));
+            Assert.That(
+                catalog.skillBranches.Count,
+                Is.EqualTo(catalog.centerTree.branches.Count + catalog.humanTree.branches.Count + catalog.robotTree.branches.Count));
+            Assert.That(
+                catalog.skillNodes.Count,
+                Is.EqualTo(catalog.centerTree.nodes.Count + catalog.humanTree.nodes.Count + catalog.robotTree.nodes.Count));
             Assert.That(resolved.ActiveLaneCount, Is.EqualTo(catalog.workerBaseStats.startingUnlockedLaneCount));
             Assert.That(resolved.MaxHandleWeight, Is.EqualTo(catalog.workerBaseStats.baseMaxHandleWeight));
             Assert.That(resolved.LaneMoveDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseLaneMoveDurationSeconds).Within(0.001f));
             Assert.That(resolved.SessionDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseSessionDurationSeconds).Within(0.001f));
+            Assert.That(resolved.HasLoadingDockAccess, Is.True);
             yield return null;
         }
 
@@ -60,18 +70,14 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockNode.prerequisiteNodeIds, Does.Contain("management.performance_contract"));
 
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
-            for (var level = 0; level < 5; level += 1)
-            {
-                Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, "management.performance_contract"), Is.True);
-            }
-
-            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId), Is.True);
             var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
             var status = MetaProgressionCalculator.DescribeNode(snapshot, catalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId);
 
             Assert.That(resolved.HasLoadingDockAccess, Is.True);
             Assert.That(status.tabId, Is.EqualTo(SkillTreeTabId.Center));
             Assert.That(status.tabDisplayName, Is.EqualTo("물류 센터 성능"));
+            Assert.That(status.isUnlocked, Is.True);
+            Assert.That(status.isLocked, Is.False);
             yield return null;
         }
 
@@ -332,6 +338,9 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(legacyCatalog.skillTabs.Count, Is.EqualTo(3));
             Assert.That(legacyCatalog.skillBranches.Count, Is.EqualTo(6));
+            Assert.That(legacyCatalog.centerTree, Is.Null);
+            Assert.That(legacyCatalog.humanTree, Is.Null);
+            Assert.That(legacyCatalog.robotTree, Is.Null);
             Assert.That(legacyCatalog.TryGetBranchDefinition(SkillBranchId.Vitality, out var vitalityBranch), Is.True);
             Assert.That(legacyCatalog.TryGetBranchDefinition(SkillBranchId.Management, out var managementBranch), Is.True);
             Assert.That(vitalityBranch.tabId, Is.EqualTo(SkillTreeTabId.Human));
@@ -342,12 +351,6 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockNode.effects, Is.Not.Empty);
 
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(legacyCatalog);
-            for (var level = 0; level < 5; level += 1)
-            {
-                Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, legacyCatalog, "management.performance_contract"), Is.True);
-            }
-
-            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, legacyCatalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId), Is.True);
             var loadingDockStatus = MetaProgressionCalculator.DescribeNode(snapshot, legacyCatalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId);
             var vitalityStatus = MetaProgressionCalculator.DescribeNode(snapshot, legacyCatalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
             var resolved = MetaProgressionCalculator.Resolve(snapshot, legacyCatalog, 5);
@@ -355,6 +358,8 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(vitalityStatus.tabId, Is.EqualTo(SkillTreeTabId.Human));
             Assert.That(loadingDockStatus.tabId, Is.EqualTo(SkillTreeTabId.Center));
             Assert.That(loadingDockStatus.tabDisplayName, Is.EqualTo("물류 센터 성능"));
+            Assert.That(loadingDockStatus.isUnlocked, Is.True);
+            Assert.That(loadingDockStatus.isLocked, Is.False);
             Assert.That(resolved.HasLoadingDockAccess, Is.True);
 
             Object.Destroy(legacyCatalog);

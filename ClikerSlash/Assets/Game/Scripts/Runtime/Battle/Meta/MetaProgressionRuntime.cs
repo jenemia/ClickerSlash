@@ -410,7 +410,7 @@ namespace ClikerSlash.Battle
             }
 
             PopulateUnmetPrerequisites(snapshot, catalog, nodeDefinition, status);
-            status.isLocked = status.unmetPrerequisiteNodeIds.Count > 0;
+            status.isLocked = currentLevel <= 0 && status.unmetPrerequisiteNodeIds.Count > 0;
             status.isAffordable = cost <= currentBalance;
             status.canUpgrade = !status.isLocked && !status.isMaxed && status.isAffordable;
             status.prerequisiteSummary = status.unmetPrerequisiteNames.Count == 0
