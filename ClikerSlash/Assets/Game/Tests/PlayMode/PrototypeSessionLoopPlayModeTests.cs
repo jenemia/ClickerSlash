@@ -1,6 +1,7 @@
 using System.Collections;
 using ClikerSlash.Battle;
 using NUnit.Framework;
+using Unity.Cinemachine;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -228,21 +229,9 @@ namespace ClikerSlash.Tests.PlayMode
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
 
             var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
-            Assert.That(dockState.HasLoadingDockAccess, Is.False);
+            Assert.That(dockState.HasLoadingDockAccess, Is.True);
             Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.Lane));
             Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.None));
-            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.False);
-
-            SeedRuntimeCurrency(7);
-            for (var level = 0; level < 5; level += 1)
-            {
-                Assert.That(PrototypeSessionRuntime.TryUpgradeNode("management.performance_contract", catalog), Is.True);
-            }
-
-            Assert.That(PrototypeSessionRuntime.TryUpgradeNode(MetaProgressionCatalogAsset.LoadingDockUnlockNodeId, catalog), Is.True);
-
-            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
-            Assert.That(dockState.HasLoadingDockAccess, Is.True);
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
 
             dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
@@ -271,44 +260,86 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
-        /// 상하차 진입/복귀 요청이 프레젠테이션 브리지의 90도 카메라 회전으로 소비되는지 검증합니다.
+        /// 상하차 진입/복귀 요청이 도크 카메라 앵커와 레인 카메라 사이를 Cinemachine으로 전환하는지 검증합니다.
         /// </summary>
         [UnityTest]
-        public IEnumerator LoadingDockCameraTransitionRotatesAndReturns()
+        public IEnumerator LoadingDockCameraTransitionTargetsAnchorAndReturns()
         {
             PrototypeSessionRuntime.ResetPrototypeState();
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
-            SeedRuntimeCurrency(7);
-            for (var level = 0; level < 5; level += 1)
-            {
-                Assert.That(PrototypeSessionRuntime.TryUpgradeNode("management.performance_contract", catalog), Is.True);
-            }
 
-            Assert.That(PrototypeSessionRuntime.TryUpgradeNode(MetaProgressionCatalogAsset.LoadingDockUnlockNodeId, catalog), Is.True);
-
-            var cameraObject = new GameObject("LoadingDockCamera", typeof(Camera));
+            var cameraObject = new GameObject("LoadingDockCamera", typeof(Camera), typeof(CinemachineBrain));
             var camera = cameraObject.GetComponent<Camera>();
             camera.transform.SetPositionAndRotation(new Vector3(0f, 10.6f, -16.8f), Quaternion.Euler(31f, 0f, 0f));
+            var brain = cameraObject.GetComponent<CinemachineBrain>();
+            brain.DefaultBlend = new CinemachineBlendDefinition(
+                CinemachineBlendDefinition.Styles.EaseInOut,
+                PrototypeSessionRuntime.DefaultLoadingDockTransitionDurationSeconds);
 
             var battleViewObject = new GameObject("BattleView");
             var battleView = battleViewObject.AddComponent<BattleViewAuthoring>();
             battleView.CameraPosition = camera.transform.position;
             battleView.CameraRotation = new Vector3(31f, 0f, 0f);
+            battleView.CameraFieldOfView = 34f;
+
+            var loadingDockEnvironmentObject = new GameObject("LoadingDockEnvironment");
+            var loadingDockEnvironment = loadingDockEnvironmentObject.AddComponent<LoadingDockEnvironmentAuthoring>();
+            var cargoBayRoot = new GameObject("CargoBayRoot").transform;
+            cargoBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
+            cargoBayRoot.localPosition = new Vector3(-5f, 0f, -1.8f);
+            loadingDockEnvironment.cargoBayRoot = cargoBayRoot;
+
+            var truckBayRoot = new GameObject("TruckBayRoot").transform;
+            truckBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
+            truckBayRoot.localPosition = new Vector3(5f, 0f, 1.8f);
+            loadingDockEnvironment.truckBayRoot = truckBayRoot;
+
+            var truckDropZone = new GameObject("TruckDropZone").transform;
+            truckDropZone.SetParent(truckBayRoot, false);
+            loadingDockEnvironment.truckDropZone = truckDropZone;
+
+            var cameraAnchor = new GameObject("LoadingDockCameraAnchor").transform;
+            cameraAnchor.SetParent(loadingDockEnvironmentObject.transform, false);
+            cameraAnchor.localPosition = new Vector3(-1.2f, 12.2f, -14.5f);
+            cameraAnchor.localRotation = Quaternion.Euler(36f, 18f, 0f);
+            loadingDockEnvironment.cameraAnchor = cameraAnchor;
+
+            var laneVirtualCamera = CreatePassiveVirtualCamera(
+                "LaneVirtualCamera",
+                battleView.CameraPosition,
+                Quaternion.Euler(battleView.CameraRotation),
+                battleView.CameraFieldOfView,
+                20);
+            var loadingDockVirtualCamera = CreatePassiveVirtualCamera(
+                "LoadingDockVirtualCamera",
+                cameraAnchor.position,
+                cameraAnchor.rotation,
+                battleView.CameraFieldOfView,
+                10);
 
             var bridgeObject = new GameObject("BattlePresentationRoot", typeof(BattlePresentationBridge));
             var bridge = bridgeObject.GetComponent<BattlePresentationBridge>();
-            bridge.BindSceneReferences(camera, battleView);
+            bridge.BindSceneReferences(camera, battleView, loadingDockEnvironment, laneVirtualCamera, loadingDockVirtualCamera);
 
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
             yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 60);
-            Assert.That(Mathf.Abs(Mathf.DeltaAngle(camera.transform.eulerAngles.y, 90f)), Is.LessThan(1f));
+            yield return WaitForCameraPose(camera, cameraAnchor.position, cameraAnchor.rotation, 60);
+            Assert.That(brain.ActiveVirtualCamera, Is.SameAs(loadingDockVirtualCamera));
 
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
             yield return WaitForDockPhase(catalog, WorkAreaType.Lane, WorkAreaTransitionPhase.None, 60);
-            Assert.That(Mathf.Abs(Mathf.DeltaAngle(camera.transform.eulerAngles.y, 0f)), Is.LessThan(1f));
+            yield return WaitForCameraPose(
+                camera,
+                battleView.CameraPosition,
+                Quaternion.Euler(battleView.CameraRotation),
+                60);
+            Assert.That(brain.ActiveVirtualCamera, Is.SameAs(laneVirtualCamera));
 
             Object.Destroy(cameraObject);
             Object.Destroy(battleViewObject);
+            Object.Destroy(loadingDockEnvironmentObject);
+            Object.Destroy(laneVirtualCamera.gameObject);
+            Object.Destroy(loadingDockVirtualCamera.gameObject);
             Object.Destroy(bridgeObject);
         }
 
@@ -327,11 +358,60 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockEnvironment.truckBayRoot, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoThrowOrigin, Is.Not.Null);
             Assert.That(loadingDockEnvironment.truckDropZone, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.cameraAnchor, Is.Not.Null);
             Assert.That(
                 Vector3.Distance(
                     loadingDockEnvironment.cargoBayRoot.position,
                     loadingDockEnvironment.truckBayRoot.position),
                 Is.GreaterThan(6f));
+        }
+
+        /// <summary>
+        /// 실제 배틀 씬에서도 상하차 진입 요청이 프레젠테이션 누락 없이 활성 상태까지 완료되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BattleSceneLoadingDockEntryCompletesFromRuntimeRequest()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            var initialState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(initialState.HasLoadingDockAccess, Is.True);
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            var mainCamera = Camera.main;
+            Assert.That(mainCamera, Is.Not.Null);
+
+            var brain = mainCamera.GetComponent<CinemachineBrain>();
+            Assert.That(brain, Is.Not.Null);
+
+            var loadingDockCamera = Object.FindObjectsByType<CinemachineCamera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            CinemachineCamera activeDockCamera = null;
+            foreach (var virtualCamera in loadingDockCamera)
+            {
+                if (virtualCamera != null && virtualCamera.name == "LoadingDockVirtualCamera")
+                {
+                    activeDockCamera = virtualCamera;
+                    break;
+                }
+            }
+
+            var environment = Object.FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            Assert.That(activeDockCamera, Is.Not.Null);
+            Assert.That(environment, Is.Not.Null);
+            Assert.That(environment.cameraAnchor, Is.Not.Null);
+            yield return WaitForCameraPose(mainCamera, environment.cameraAnchor.position, environment.cameraAnchor.rotation, 120);
+            Assert.That(brain.ActiveVirtualCamera, Is.SameAs(activeDockCamera));
+
+            var cargoViewport = mainCamera.WorldToViewportPoint(environment.cargoBayRoot.position);
+            var truckViewport = mainCamera.WorldToViewportPoint(environment.truckBayRoot.position);
+            Assert.That(IsInsideViewport(cargoViewport), Is.True);
+            Assert.That(IsInsideViewport(truckViewport), Is.True);
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.Lane, WorkAreaTransitionPhase.None, 120);
         }
 
         private static IEnumerator LoadSceneAndWait(string sceneName)
@@ -410,6 +490,51 @@ namespace ClikerSlash.Tests.PlayMode
             var finalState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
             Assert.That(finalState.CurrentArea, Is.EqualTo(expectedArea));
             Assert.That(finalState.TransitionPhase, Is.EqualTo(expectedPhase));
+        }
+
+        private static IEnumerator WaitForCameraPose(
+            Camera camera,
+            Vector3 expectedPosition,
+            Quaternion expectedRotation,
+            int maxFrames)
+        {
+            for (var frame = 0; frame < maxFrames; frame += 1)
+            {
+                if (Vector3.Distance(camera.transform.position, expectedPosition) <= 0.2f &&
+                    Quaternion.Angle(camera.transform.rotation, expectedRotation) <= 1.5f)
+                {
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            Assert.That(Vector3.Distance(camera.transform.position, expectedPosition), Is.LessThanOrEqualTo(0.2f));
+            Assert.That(Quaternion.Angle(camera.transform.rotation, expectedRotation), Is.LessThanOrEqualTo(1.5f));
+        }
+
+        private static CinemachineCamera CreatePassiveVirtualCamera(
+            string name,
+            Vector3 position,
+            Quaternion rotation,
+            float fieldOfView,
+            int priority)
+        {
+            var cameraObject = new GameObject(name, typeof(CinemachineCamera));
+            cameraObject.transform.SetPositionAndRotation(position, rotation);
+            var virtualCamera = cameraObject.GetComponent<CinemachineCamera>();
+            var lens = virtualCamera.Lens;
+            lens.FieldOfView = fieldOfView;
+            virtualCamera.Lens = lens;
+            virtualCamera.Priority = priority;
+            return virtualCamera;
+        }
+
+        private static bool IsInsideViewport(Vector3 viewportPoint)
+        {
+            return viewportPoint.z > 0f &&
+                   viewportPoint.x is >= 0f and <= 1f &&
+                   viewportPoint.y is >= 0f and <= 1f;
         }
     }
 }

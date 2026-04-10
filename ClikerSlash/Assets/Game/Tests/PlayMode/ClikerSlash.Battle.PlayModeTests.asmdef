@@ -3,6 +3,7 @@
   "rootNamespace": "ClikerSlash.Tests.PlayMode",
   "references": [
     "ClikerSlash.Battle.Runtime",
+    "Unity.Cinemachine",
     "Unity.Entities",
     "Unity.Collections",
     "Unity.Mathematics",

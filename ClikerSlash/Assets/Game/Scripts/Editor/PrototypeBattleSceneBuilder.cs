@@ -3,6 +3,7 @@ using ClikerSlash.Battle;
 using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -43,12 +44,12 @@ namespace ClikerSlash.Editor
             scene.name = "PrototypeBattle";
 
             var battleView = CreateBattleViewRoot();
-            CreateCamera(battleView);
+            var mainCamera = CreateCamera(battleView);
             CreateLight();
             var laneRoot = CreateLaneVisualRoot(battleView, laneMaterial, accentMaterial);
-            CreateLoadingDockEnvironment(battleView, laneMaterial, accentMaterial, cargoMaterial, workerMaterial);
+            var loadingDockEnvironment = CreateLoadingDockEnvironment(battleView, laneMaterial, accentMaterial, cargoMaterial, workerMaterial);
             CreateConfigRoots(battleView, laneRoot);
-            CreatePresentationRoot(workerPrefab, cargoPrefab);
+            CreatePresentationRoot(workerPrefab, cargoPrefab, mainCamera, battleView, loadingDockEnvironment);
             CreateHudRoot();
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
@@ -99,7 +100,7 @@ namespace ClikerSlash.Editor
             cameraObject.transform.rotation = Quaternion.Euler(48f, 0f, 0f);
         }
 
-        private static void CreateCamera(BattleViewAuthoring battleView)
+        private static Camera CreateCamera(BattleViewAuthoring battleView)
         {
             var cameraObject = new GameObject("Main Camera");
             cameraObject.tag = "MainCamera";
@@ -110,9 +111,14 @@ namespace ClikerSlash.Editor
             camera.fieldOfView = battleView.CameraFieldOfView;
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 100f;
+            var brain = cameraObject.AddComponent<CinemachineBrain>();
+            brain.DefaultBlend = new CinemachineBlendDefinition(
+                CinemachineBlendDefinition.Styles.EaseInOut,
+                PrototypeSessionRuntime.DefaultLoadingDockTransitionDurationSeconds);
 
             cameraObject.transform.position = battleView.CameraPosition;
             cameraObject.transform.rotation = Quaternion.Euler(battleView.CameraRotation);
+            return camera;
         }
 
         private static void CreateLight()
@@ -159,7 +165,7 @@ namespace ClikerSlash.Editor
             Object.DestroyImmediate(line.GetComponent<Collider>());
         }
 
-        private static void CreateLoadingDockEnvironment(
+        private static LoadingDockEnvironmentAuthoring CreateLoadingDockEnvironment(
             BattleViewAuthoring battleView,
             Material floorMaterial,
             Material accentMaterial,
@@ -248,6 +254,13 @@ namespace ClikerSlash.Editor
             truckDropZone.transform.SetParent(truckBayRoot.transform, false);
             truckDropZone.transform.localPosition = new Vector3(-1.4f, 1.2f, 0.8f);
             authoring.truckDropZone = truckDropZone.transform;
+
+            var cameraAnchor = new GameObject("LoadingDockCameraAnchor");
+            cameraAnchor.transform.SetParent(root.transform, false);
+            cameraAnchor.transform.localPosition = new Vector3(-1.2f, 12.2f, -14.5f);
+            cameraAnchor.transform.localRotation = Quaternion.Euler(36f, 18f, 0f);
+            authoring.cameraAnchor = cameraAnchor.transform;
+            return authoring;
         }
 
         private static void CreateConfigRoots(BattleViewAuthoring battleView, GameObject laneRoot)
@@ -283,17 +296,65 @@ namespace ClikerSlash.Editor
             laneRoot.transform.position = Vector3.zero;
         }
 
-        private static void CreatePresentationRoot(GameObject workerPrefab, GameObject cargoPrefab)
+        private static void CreatePresentationRoot(
+            GameObject workerPrefab,
+            GameObject cargoPrefab,
+            Camera mainCamera,
+            BattleViewAuthoring battleView,
+            LoadingDockEnvironmentAuthoring loadingDockEnvironment)
         {
             var presentationRoot = new GameObject("BattlePresentationRoot");
             var bridge = presentationRoot.AddComponent<BattlePresentationBridge>();
-            presentationRoot.AddComponent<LoadingDockMiniGamePresenter>();
+            var miniGamePresenter = presentationRoot.AddComponent<LoadingDockMiniGamePresenter>();
+
+            var laneVirtualCamera = CreateVirtualCamera(
+                "LaneVirtualCamera",
+                presentationRoot.transform,
+                battleView.CameraPosition,
+                Quaternion.Euler(battleView.CameraRotation),
+                battleView.CameraFieldOfView,
+                20);
+            var loadingDockVirtualCamera = CreateVirtualCamera(
+                "LoadingDockVirtualCamera",
+                presentationRoot.transform,
+                loadingDockEnvironment.cameraAnchor != null ? loadingDockEnvironment.cameraAnchor.position : battleView.CameraPosition,
+                loadingDockEnvironment.cameraAnchor != null ? loadingDockEnvironment.cameraAnchor.rotation : Quaternion.Euler(battleView.CameraRotation),
+                battleView.CameraFieldOfView,
+                10);
+
+            bridge.BindSceneReferences(
+                mainCamera,
+                battleView,
+                loadingDockEnvironment,
+                laneVirtualCamera,
+                loadingDockVirtualCamera);
+            miniGamePresenter.BindSceneReferences(mainCamera, loadingDockEnvironment);
 
             var workerField = typeof(BattlePresentationBridge).GetField("playerViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             var cargoField = typeof(BattlePresentationBridge).GetField("cargoViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             workerField?.SetValue(bridge, workerPrefab);
             cargoField?.SetValue(bridge, cargoPrefab);
             EditorUtility.SetDirty(bridge);
+            EditorUtility.SetDirty(miniGamePresenter);
+        }
+
+        private static CinemachineCamera CreateVirtualCamera(
+            string name,
+            Transform parent,
+            Vector3 position,
+            Quaternion rotation,
+            float fieldOfView,
+            int priority)
+        {
+            var cameraObject = new GameObject(name);
+            cameraObject.transform.SetParent(parent, false);
+            cameraObject.transform.SetPositionAndRotation(position, rotation);
+            var virtualCamera = cameraObject.AddComponent<CinemachineCamera>();
+            var lens = virtualCamera.Lens;
+            lens.FieldOfView = fieldOfView;
+            virtualCamera.Lens = lens;
+            virtualCamera.Priority = priority;
+            return virtualCamera;
         }
 
         private static void CreateHudRoot()

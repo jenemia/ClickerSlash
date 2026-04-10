@@ -27,6 +27,12 @@ namespace ClikerSlash.Battle
         private bool _completionQueued;
         private float _completionCountdown;
 
+        public void BindSceneReferences(Camera targetCamera, LoadingDockEnvironmentAuthoring targetEnvironment)
+        {
+            sceneCamera = targetCamera;
+            environment = targetEnvironment;
+        }
+
         private void Update()
         {
             sceneCamera ??= Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();

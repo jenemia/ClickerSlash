@@ -77,6 +77,9 @@ namespace ClikerSlash.Battle
                 activeLaneCount);
 
             HandleLoadingDockInput(loadingDockState, activeLaneCount, outcome);
+            loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
+                MetaProgressionCatalogAsset.LoadDefaultCatalog(),
+                activeLaneCount);
 
             infoText.text = PrototypeSessionRuntime.HasLastLoadingDockResult
                 ? $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}\nDock {PrototypeSessionRuntime.LastLoadingDockResult.DeliveredCargoCount}/{PrototypeSessionRuntime.LastLoadingDockResult.TotalCargoCount}"

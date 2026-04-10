@@ -3,6 +3,7 @@
   "rootNamespace": "ClikerSlash.Editor",
   "references": [
     "ClikerSlash.Battle.Runtime",
+    "Unity.Cinemachine",
     "Unity.Entities",
     "Unity.Collections",
     "Unity.InputSystem",

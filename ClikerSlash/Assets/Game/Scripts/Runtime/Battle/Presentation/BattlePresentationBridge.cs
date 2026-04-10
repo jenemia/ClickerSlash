@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Cinemachine;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Transforms;
@@ -8,6 +9,7 @@ namespace ClikerSlash.Battle
 {
     /// <summary>
     /// ECS의 플레이어와 물류 위치를 프로토타입 씬의 단순 게임 오브젝트 뷰에 반영합니다.
+    /// 상하차 진입 연출은 Cinemachine 가상 카메라 우선순위 전환으로 처리합니다.
     /// </summary>
     public sealed class BattlePresentationBridge : MonoBehaviour
     {
@@ -15,26 +17,24 @@ namespace ClikerSlash.Battle
         [SerializeField] private GameObject cargoViewPrefab;
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private BattleViewAuthoring battleView;
-        [SerializeField] [Min(0.05f)] private float loadingDockTransitionDuration = 0.35f;
-        [SerializeField] private float loadingDockYawOffset = 90f;
+        [SerializeField] private LoadingDockEnvironmentAuthoring loadingDockEnvironment;
+        [SerializeField] private CinemachineCamera laneVirtualCamera;
+        [SerializeField] private CinemachineCamera loadingDockVirtualCamera;
+        [SerializeField] [Min(0.05f)] private float loadingDockTransitionDuration = PrototypeSessionRuntime.DefaultLoadingDockTransitionDurationSeconds;
+        [SerializeField] [Min(0)] private int standbyCameraPriority = 10;
+        [SerializeField] [Min(1)] private int liveCameraPriority = 20;
 
         private World _cachedWorld;
         private EntityQuery _playerQuery;
         private EntityQuery _cargoQuery;
         private GameObject _playerInstance;
         private readonly Dictionary<Entity, GameObject> _cargoInstances = new();
-        private bool _cameraPoseInitialized;
-        private WorkAreaTransitionPhase _animatedPhase;
-        private float _transitionElapsed;
-        private Vector3 _cameraTransitionStartPosition;
-        private Quaternion _cameraTransitionStartRotation;
-        private Vector3 _laneCameraPosition;
-        private Quaternion _laneCameraRotation;
-        private Vector3 _loadingDockCameraPosition;
-        private Quaternion _loadingDockCameraRotation;
+        private bool _cameraRigInitialized;
+        private bool _dockCameraIsLive;
 
         private void Update()
         {
+            PrototypeSessionRuntime.AdvanceLoadingDockTransition(Mathf.Max(Time.unscaledDeltaTime, 1f / 60f));
             SyncLoadingDockCamera();
 
             if (!TryPrepareQueries(out var entityManager))
@@ -50,13 +50,21 @@ namespace ClikerSlash.Battle
         /// <summary>
         /// 테스트나 씬 빌더가 카메라/뷰 참조를 명시적으로 연결할 때 사용합니다.
         /// </summary>
-        public void BindSceneReferences(Camera targetCamera, BattleViewAuthoring targetBattleView)
+        public void BindSceneReferences(
+            Camera targetCamera,
+            BattleViewAuthoring targetBattleView,
+            LoadingDockEnvironmentAuthoring targetLoadingDockEnvironment = null,
+            CinemachineCamera targetLaneVirtualCamera = null,
+            CinemachineCamera targetLoadingDockVirtualCamera = null)
         {
             sceneCamera = targetCamera;
             battleView = targetBattleView;
-            _cameraPoseInitialized = false;
-            EnsureCameraPoseInitialized();
-            ApplyCameraPose(_laneCameraPosition, _laneCameraRotation);
+            loadingDockEnvironment = targetLoadingDockEnvironment;
+            laneVirtualCamera = targetLaneVirtualCamera;
+            loadingDockVirtualCamera = targetLoadingDockVirtualCamera;
+            _cameraRigInitialized = false;
+            _dockCameraIsLive = false;
+            EnsureCameraRigInitialized();
         }
 
         private bool TryPrepareQueries(out EntityManager entityManager)
@@ -103,106 +111,107 @@ namespace ClikerSlash.Battle
 
         private void SyncLoadingDockCamera()
         {
-            if (!EnsureCameraPoseInitialized())
+            if (!EnsureCameraRigInitialized())
             {
                 return;
             }
 
             var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
-            switch (dockState.TransitionPhase)
+            var shouldUseDockCamera =
+                dockState.TransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
+                dockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+
+            if (_dockCameraIsLive == shouldUseDockCamera)
             {
-                case WorkAreaTransitionPhase.EnteringLoadingDock:
-                    AnimateCameraTransition(
-                        WorkAreaTransitionPhase.EnteringLoadingDock,
-                        _loadingDockCameraPosition,
-                        _loadingDockCameraRotation,
-                        PrototypeSessionRuntime.ConsumeLoadingDockEntryRequest);
-                    break;
-
-                case WorkAreaTransitionPhase.ReturningToLane:
-                    AnimateCameraTransition(
-                        WorkAreaTransitionPhase.ReturningToLane,
-                        _laneCameraPosition,
-                        _laneCameraRotation,
-                        PrototypeSessionRuntime.ConsumeLoadingDockReturnRequest);
-                    break;
-
-                case WorkAreaTransitionPhase.ActiveInLoadingDock:
-                    ApplyCameraPose(_loadingDockCameraPosition, _loadingDockCameraRotation);
-                    _animatedPhase = WorkAreaTransitionPhase.ActiveInLoadingDock;
-                    break;
-
-                default:
-                    ApplyCameraPose(_laneCameraPosition, _laneCameraRotation);
-                    _animatedPhase = WorkAreaTransitionPhase.None;
-                    break;
+                return;
             }
+
+            _dockCameraIsLive = shouldUseDockCamera;
+            laneVirtualCamera.Priority = shouldUseDockCamera ? standbyCameraPriority : liveCameraPriority;
+            loadingDockVirtualCamera.Priority = shouldUseDockCamera ? liveCameraPriority : standbyCameraPriority;
         }
 
-        private bool EnsureCameraPoseInitialized()
+        private bool EnsureCameraRigInitialized()
         {
-            sceneCamera ??= Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
-            battleView ??= FindFirstObjectByType<BattleViewAuthoring>();
-            if (sceneCamera == null)
-            {
-                return false;
-            }
-
-            if (_cameraPoseInitialized)
+            if (_cameraRigInitialized &&
+                sceneCamera != null &&
+                battleView != null &&
+                loadingDockEnvironment != null &&
+                loadingDockEnvironment.cameraAnchor != null &&
+                laneVirtualCamera != null &&
+                loadingDockVirtualCamera != null)
             {
                 return true;
             }
 
-            _laneCameraPosition = battleView != null ? battleView.CameraPosition : sceneCamera.transform.position;
-            _laneCameraRotation = battleView != null
-                ? Quaternion.Euler(battleView.CameraRotation)
-                : sceneCamera.transform.rotation;
-            _loadingDockCameraPosition = _laneCameraPosition;
-            _loadingDockCameraRotation = _laneCameraRotation * Quaternion.Euler(0f, loadingDockYawOffset, 0f);
-            _animatedPhase = WorkAreaTransitionPhase.None;
-            _transitionElapsed = 0f;
-            _cameraPoseInitialized = true;
+            sceneCamera ??= Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            battleView ??= FindFirstObjectByType<BattleViewAuthoring>();
+            loadingDockEnvironment ??= FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            laneVirtualCamera ??= FindVirtualCamera("LaneVirtualCamera");
+            loadingDockVirtualCamera ??= FindVirtualCamera("LoadingDockVirtualCamera");
+
+            if (sceneCamera == null ||
+                battleView == null ||
+                loadingDockEnvironment == null ||
+                loadingDockEnvironment.cameraAnchor == null ||
+                laneVirtualCamera == null ||
+                loadingDockVirtualCamera == null)
+            {
+                return false;
+            }
+
+            var brain = sceneCamera.GetComponent<CinemachineBrain>() ?? sceneCamera.gameObject.AddComponent<CinemachineBrain>();
+            brain.DefaultBlend = new CinemachineBlendDefinition(
+                CinemachineBlendDefinition.Styles.EaseInOut,
+                Mathf.Max(0.05f, loadingDockTransitionDuration));
+
+            ConfigureVirtualCamera(
+                laneVirtualCamera,
+                battleView.CameraPosition,
+                Quaternion.Euler(battleView.CameraRotation),
+                battleView.CameraFieldOfView);
+            ConfigureVirtualCamera(
+                loadingDockVirtualCamera,
+                loadingDockEnvironment.cameraAnchor.position,
+                loadingDockEnvironment.cameraAnchor.rotation,
+                battleView.CameraFieldOfView);
+
+            _cameraRigInitialized = true;
+            _dockCameraIsLive = false;
+            laneVirtualCamera.Priority = liveCameraPriority;
+            loadingDockVirtualCamera.Priority = standbyCameraPriority;
             return true;
         }
 
-        private void AnimateCameraTransition(
-            WorkAreaTransitionPhase targetPhase,
-            Vector3 targetPosition,
-            Quaternion targetRotation,
-            System.Action onTransitionFinished)
+        private static CinemachineCamera FindVirtualCamera(string cameraName)
         {
-            if (_animatedPhase != targetPhase)
+            var cameras = FindObjectsByType<CinemachineCamera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            foreach (var camera in cameras)
             {
-                _animatedPhase = targetPhase;
-                _transitionElapsed = 0f;
-                _cameraTransitionStartPosition = sceneCamera.transform.position;
-                _cameraTransitionStartRotation = sceneCamera.transform.rotation;
+                if (camera != null && string.Equals(camera.name, cameraName, System.StringComparison.Ordinal))
+                {
+                    return camera;
+                }
             }
 
-            _transitionElapsed += Mathf.Max(Time.deltaTime, 1f / 60f);
-            var duration = Mathf.Max(0.05f, loadingDockTransitionDuration);
-            var normalizedTime = Mathf.Clamp01(_transitionElapsed / duration);
-            var easedTime = normalizedTime * normalizedTime * (3f - 2f * normalizedTime);
-            ApplyCameraPose(
-                Vector3.Lerp(_cameraTransitionStartPosition, targetPosition, easedTime),
-                Quaternion.Slerp(_cameraTransitionStartRotation, targetRotation, easedTime));
-
-            if (normalizedTime < 1f)
-            {
-                return;
-            }
-
-            onTransitionFinished?.Invoke();
+            return null;
         }
 
-        private void ApplyCameraPose(Vector3 position, Quaternion rotation)
+        private static void ConfigureVirtualCamera(
+            CinemachineCamera virtualCamera,
+            Vector3 position,
+            Quaternion rotation,
+            float fieldOfView)
         {
-            if (sceneCamera == null)
+            if (virtualCamera == null)
             {
                 return;
             }
 
-            sceneCamera.transform.SetPositionAndRotation(position, rotation);
+            virtualCamera.transform.SetPositionAndRotation(position, rotation);
+            var lens = virtualCamera.Lens;
+            lens.FieldOfView = fieldOfView;
+            virtualCamera.Lens = lens;
         }
 
         private void SyncCargo(EntityManager entityManager)

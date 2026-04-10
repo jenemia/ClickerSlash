@@ -25,6 +25,7 @@ namespace ClikerSlash.Battle
         public const int MinimumHealthLevel = 1;
         public const float DefaultBaseWorkDurationSeconds = 30f;
         public const float DefaultHealthDurationBonusSeconds = 10f;
+        public const float DefaultLoadingDockTransitionDurationSeconds = 0.35f;
 
         // 참이면 허브가 이전 작업에서 캡처한 결과 스냅샷을 표시해야 합니다.
         public static bool HasLastBattleResult { get; private set; }
@@ -38,6 +39,7 @@ namespace ClikerSlash.Battle
         private static WorkAreaTransitionPhase _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
         private static bool _hasPendingLoadingDockEntryRequest;
         private static bool _hasPendingLoadingDockReturnRequest;
+        private static float _loadingDockTransitionElapsed;
 
         private static MetaProgressionRuntimeState _metaProgressionRuntimeState;
 
@@ -180,6 +182,7 @@ namespace ClikerSlash.Battle
             _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
             _hasPendingLoadingDockEntryRequest = false;
             _hasPendingLoadingDockReturnRequest = false;
+            _loadingDockTransitionElapsed = 0f;
             _metaProgressionRuntimeState = null;
         }
 
@@ -315,6 +318,7 @@ namespace ClikerSlash.Battle
             _hasPendingLoadingDockEntryRequest = true;
             _hasPendingLoadingDockReturnRequest = false;
             _workAreaTransitionPhase = WorkAreaTransitionPhase.EnteringLoadingDock;
+            _loadingDockTransitionElapsed = 0f;
             return true;
         }
 
@@ -331,6 +335,7 @@ namespace ClikerSlash.Battle
             _hasPendingLoadingDockEntryRequest = false;
             _currentWorkArea = WorkAreaType.LoadingDock;
             _workAreaTransitionPhase = WorkAreaTransitionPhase.ActiveInLoadingDock;
+            _loadingDockTransitionElapsed = 0f;
         }
 
         /// <summary>
@@ -346,6 +351,7 @@ namespace ClikerSlash.Battle
 
             _hasPendingLoadingDockReturnRequest = true;
             _workAreaTransitionPhase = WorkAreaTransitionPhase.ReturningToLane;
+            _loadingDockTransitionElapsed = 0f;
             return true;
         }
 
@@ -362,6 +368,33 @@ namespace ClikerSlash.Battle
             _hasPendingLoadingDockReturnRequest = false;
             _currentWorkArea = WorkAreaType.Lane;
             _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
+            _loadingDockTransitionElapsed = 0f;
+        }
+
+        /// <summary>
+        /// 프레젠테이션 브리지 호출이 빠져도 상하차 전환 상태가 영구 대기하지 않도록 시간을 기준으로 확정합니다.
+        /// </summary>
+        public static void AdvanceLoadingDockTransition(float deltaTime, float transitionDuration = DefaultLoadingDockTransitionDurationSeconds)
+        {
+            if (_workAreaTransitionPhase != WorkAreaTransitionPhase.EnteringLoadingDock &&
+                _workAreaTransitionPhase != WorkAreaTransitionPhase.ReturningToLane)
+            {
+                return;
+            }
+
+            _loadingDockTransitionElapsed += Mathf.Max(0f, deltaTime);
+            if (_loadingDockTransitionElapsed < Mathf.Max(0.01f, transitionDuration))
+            {
+                return;
+            }
+
+            if (_workAreaTransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock)
+            {
+                ConsumeLoadingDockEntryRequest();
+                return;
+            }
+
+            ConsumeLoadingDockReturnRequest();
         }
 
         private static float CalculateWorkDuration(int healthLevel, float baseWorkDurationSeconds, float healthDurationBonusSeconds)

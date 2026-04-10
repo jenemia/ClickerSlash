@@ -2,6 +2,7 @@
   "name": "ClikerSlash.Battle.Runtime",
   "rootNamespace": "ClikerSlash.Battle",
   "references": [
+    "Unity.Cinemachine",
     "Unity.Entities",
     "Unity.Entities.Hybrid",
     "Unity.Collections",
