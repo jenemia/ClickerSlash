@@ -33,6 +33,7 @@ namespace ClikerSlash.Battle
         public static bool HasLastLoadingDockResult { get; private set; }
         public static LoadingDockResultSnapshot LastLoadingDockResult { get; private set; }
         public static float ResolvedWorkDurationSeconds { get; private set; }
+        public static bool IsPauseMenuOpen { get; private set; }
         // 참이면 허브에서 작업 현장으로 넘어가는 중이며, 전투 씬이 아직 요청을 소비하지 않은 상태입니다.
         public static bool HasPendingBattleEntryRequest { get; private set; }
         private static WorkAreaType _currentWorkArea = WorkAreaType.Lane;
@@ -172,6 +173,7 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static void ResetPrototypeState()
         {
+            ClosePauseMenu();
             HasLastBattleResult = false;
             LastBattleResult = default;
             HasLastLoadingDockResult = false;
@@ -289,6 +291,7 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static void RequestBattleEntry()
         {
+            ClosePauseMenu();
             HasPendingBattleEntryRequest = true;
         }
 
@@ -308,7 +311,8 @@ namespace ClikerSlash.Battle
             int physicalLaneCount = int.MaxValue)
         {
             EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
-            if (!_metaProgressionRuntimeState.resolvedProgression.HasLoadingDockAccess ||
+            if (IsPauseMenuOpen ||
+                !_metaProgressionRuntimeState.resolvedProgression.HasLoadingDockAccess ||
                 _currentWorkArea != WorkAreaType.Lane ||
                 _workAreaTransitionPhase != WorkAreaTransitionPhase.None)
             {
@@ -343,7 +347,8 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static bool TryRequestLoadingDockReturn()
         {
-            if (_currentWorkArea != WorkAreaType.LoadingDock ||
+            if (IsPauseMenuOpen ||
+                _currentWorkArea != WorkAreaType.LoadingDock ||
                 _workAreaTransitionPhase != WorkAreaTransitionPhase.ActiveInLoadingDock)
             {
                 return false;
@@ -376,6 +381,11 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static void AdvanceLoadingDockTransition(float deltaTime, float transitionDuration = DefaultLoadingDockTransitionDurationSeconds)
         {
+            if (IsPauseMenuOpen)
+            {
+                return;
+            }
+
             if (_workAreaTransitionPhase != WorkAreaTransitionPhase.EnteringLoadingDock &&
                 _workAreaTransitionPhase != WorkAreaTransitionPhase.ReturningToLane)
             {
@@ -395,6 +405,53 @@ namespace ClikerSlash.Battle
             }
 
             ConsumeLoadingDockReturnRequest();
+        }
+
+        /// <summary>
+        /// 현재 구역 기준으로 레인과 상하차 구역 사이 전환 요청을 토글합니다.
+        /// </summary>
+        public static bool TryToggleLoadingDock(
+            MetaProgressionCatalogAsset catalog,
+            int physicalLaneCount = int.MaxValue)
+        {
+            EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
+            if (IsPauseMenuOpen)
+            {
+                return false;
+            }
+
+            if (_currentWorkArea == WorkAreaType.Lane)
+            {
+                return _workAreaTransitionPhase == WorkAreaTransitionPhase.None &&
+                       TryRequestLoadingDockEntry(catalog, physicalLaneCount);
+            }
+
+            return _workAreaTransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock &&
+                   TryRequestLoadingDockReturn();
+        }
+
+        /// <summary>
+        /// 전역 일시정지 팝업을 열고 시간을 멈춥니다.
+        /// </summary>
+        public static void OpenPauseMenu()
+        {
+            ApplyPauseState(true);
+        }
+
+        /// <summary>
+        /// 전역 일시정지 팝업을 닫고 시간을 다시 흐르게 합니다.
+        /// </summary>
+        public static void ClosePauseMenu()
+        {
+            ApplyPauseState(false);
+        }
+
+        /// <summary>
+        /// 전역 일시정지 팝업의 열림 상태를 반전합니다.
+        /// </summary>
+        public static void TogglePauseMenu()
+        {
+            ApplyPauseState(!IsPauseMenuOpen);
         }
 
         private static float CalculateWorkDuration(int healthLevel, float baseWorkDurationSeconds, float healthDurationBonusSeconds)
@@ -422,6 +479,12 @@ namespace ClikerSlash.Battle
             _metaProgressionRuntimeState ??= new MetaProgressionRuntimeState();
             _metaProgressionRuntimeState.snapshot ??= MetaProgressionCalculator.CreateDefaultSnapshot(MetaProgressionCatalogAsset.LoadDefaultCatalog());
             _metaProgressionRuntimeState.snapshot.currency ??= PlayerCurrencySnapshot.CreateDefault();
+        }
+
+        private static void ApplyPauseState(bool isPaused)
+        {
+            IsPauseMenuOpen = isPaused;
+            Time.timeScale = isPaused ? 0f : 1f;
         }
 
         /// <summary>

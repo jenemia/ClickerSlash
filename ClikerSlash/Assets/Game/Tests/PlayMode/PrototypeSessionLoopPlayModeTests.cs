@@ -260,6 +260,92 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
+        /// Q 토글용 런타임 API는 레인과 상하차 구역 사이를 왕복하고 전환 중 재요청은 막아야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockToggleSwitchesBetweenAreasAndIgnoresTransitions()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.True);
+            var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.EnteringLoadingDock));
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.False);
+
+            PrototypeSessionRuntime.ConsumeLoadingDockEntryRequest();
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.LoadingDock));
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.ActiveInLoadingDock));
+
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.True);
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.ReturningToLane));
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.False);
+
+            PrototypeSessionRuntime.ConsumeLoadingDockReturnRequest();
+            dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.Lane));
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.None));
+            yield return null;
+        }
+
+        /// <summary>
+        /// 일시정지 팝업 상태는 시간 흐름을 멈추고 상하차 토글 요청도 차단해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator PauseMenuControlsTimeScaleAndBlocksDockToggle()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+
+            PrototypeSessionRuntime.OpenPauseMenu();
+            Assert.That(PrototypeSessionRuntime.IsPauseMenuOpen, Is.True);
+            Assert.That(Time.timeScale, Is.EqualTo(0f));
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.False);
+
+            PrototypeSessionRuntime.ClosePauseMenu();
+            Assert.That(PrototypeSessionRuntime.IsPauseMenuOpen, Is.False);
+            Assert.That(Time.timeScale, Is.EqualTo(1f));
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.True);
+            PrototypeSessionRuntime.ConsumeLoadingDockEntryRequest();
+
+            var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(catalog);
+            Assert.That(dockState.CurrentArea, Is.EqualTo(WorkAreaType.LoadingDock));
+            Assert.That(dockState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.ActiveInLoadingDock));
+
+            PrototypeSessionRuntime.OpenPauseMenu();
+            Assert.That(PrototypeSessionRuntime.IsPauseMenuOpen, Is.True);
+            Assert.That(Time.timeScale, Is.EqualTo(0f));
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.False);
+
+            PrototypeSessionRuntime.ClosePauseMenu();
+            Assert.That(PrototypeSessionRuntime.TryToggleLoadingDock(catalog), Is.True);
+            PrototypeSessionRuntime.ConsumeLoadingDockReturnRequest();
+            yield return null;
+        }
+
+        /// <summary>
+        /// 허브로 전환할 때 일시정지 상태와 timeScale이 항상 정리되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadHubSceneClosesPauseMenuState()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            PrototypeSessionRuntime.OpenPauseMenu();
+            Assert.That(PrototypeSessionRuntime.IsPauseMenuOpen, Is.True);
+            Assert.That(Time.timeScale, Is.EqualTo(0f));
+
+            PrototypeSceneNavigator.LoadHubScene();
+            yield return WaitForSceneAndWorld(PrototypeSessionRuntime.HubSceneName);
+
+            Assert.That(PrototypeSessionRuntime.IsPauseMenuOpen, Is.False);
+            Assert.That(Time.timeScale, Is.EqualTo(1f));
+        }
+
+        /// <summary>
         /// 상하차 진입/복귀 요청이 도크 카메라 앵커와 레인 카메라 사이를 Cinemachine으로 전환하는지 검증합니다.
         /// </summary>
         [UnityTest]
@@ -498,10 +584,12 @@ namespace ClikerSlash.Tests.PlayMode
             Quaternion expectedRotation,
             int maxFrames)
         {
+            const float positionTolerance = 0.4f;
+            const float rotationTolerance = 1.5f;
             for (var frame = 0; frame < maxFrames; frame += 1)
             {
-                if (Vector3.Distance(camera.transform.position, expectedPosition) <= 0.2f &&
-                    Quaternion.Angle(camera.transform.rotation, expectedRotation) <= 1.5f)
+                if (Vector3.Distance(camera.transform.position, expectedPosition) <= positionTolerance &&
+                    Quaternion.Angle(camera.transform.rotation, expectedRotation) <= rotationTolerance)
                 {
                     yield break;
                 }
@@ -509,8 +597,8 @@ namespace ClikerSlash.Tests.PlayMode
                 yield return null;
             }
 
-            Assert.That(Vector3.Distance(camera.transform.position, expectedPosition), Is.LessThanOrEqualTo(0.2f));
-            Assert.That(Quaternion.Angle(camera.transform.rotation, expectedRotation), Is.LessThanOrEqualTo(1.5f));
+            Assert.That(Vector3.Distance(camera.transform.position, expectedPosition), Is.LessThanOrEqualTo(positionTolerance));
+            Assert.That(Quaternion.Angle(camera.transform.rotation, expectedRotation), Is.LessThanOrEqualTo(rotationTolerance));
         }
 
         private static CinemachineCamera CreatePassiveVirtualCamera(

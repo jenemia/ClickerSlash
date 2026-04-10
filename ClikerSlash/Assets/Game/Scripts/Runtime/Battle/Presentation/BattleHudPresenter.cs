@@ -18,6 +18,7 @@ namespace ClikerSlash.Battle
 
         private GUIStyle _labelStyle;
         private GUIStyle _buttonStyle;
+        private GUIStyle _popupTitleStyle;
 
         public void Bind(Text info, Text lane, Text result, Text controls)
         {
@@ -76,7 +77,11 @@ namespace ClikerSlash.Battle
                 MetaProgressionCatalogAsset.LoadDefaultCatalog(),
                 activeLaneCount);
 
-            HandleLoadingDockInput(loadingDockState, activeLaneCount, outcome);
+            HandleGlobalOverlayInput(loadingDockState, outcome);
+            if (!PrototypeSessionRuntime.IsPauseMenuOpen)
+            {
+                HandleLoadingDockInput(loadingDockState, activeLaneCount, outcome);
+            }
             loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
                 MetaProgressionCatalogAsset.LoadDefaultCatalog(),
                 activeLaneCount);
@@ -101,12 +106,38 @@ namespace ClikerSlash.Battle
             resultText.gameObject.SetActive(true);
         }
 
+        private static void HandleGlobalOverlayInput(
+            LoadingDockRuntimeState loadingDockState,
+            BattleOutcomeState outcome)
+        {
+            if (outcome.HasOutcome != 0)
+            {
+                return;
+            }
+
+            if (loadingDockState.TransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
+                loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ReturningToLane)
+            {
+                return;
+            }
+
+            var keyboard = Keyboard.current;
+            if (keyboard == null || !keyboard.escapeKey.wasPressedThisFrame)
+            {
+                return;
+            }
+
+            PrototypeSessionRuntime.TogglePauseMenu();
+        }
+
         private static void HandleLoadingDockInput(
             LoadingDockRuntimeState loadingDockState,
             int physicalLaneCount,
             BattleOutcomeState outcome)
         {
-            if (!loadingDockState.HasLoadingDockAccess || outcome.HasOutcome != 0)
+            if (!loadingDockState.HasLoadingDockAccess ||
+                outcome.HasOutcome != 0 ||
+                PrototypeSessionRuntime.IsPauseMenuOpen)
             {
                 return;
             }
@@ -118,19 +149,9 @@ namespace ClikerSlash.Battle
             }
 
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
-            if (loadingDockState.CurrentArea == WorkAreaType.Lane &&
-                loadingDockState.TransitionPhase == WorkAreaTransitionPhase.None &&
-                keyboard.qKey.wasPressedThisFrame)
+            if (keyboard.qKey.wasPressedThisFrame)
             {
-                PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog, physicalLaneCount);
-                return;
-            }
-
-            if (loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
-                loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock &&
-                keyboard.escapeKey.wasPressedThisFrame)
-            {
-                PrototypeSessionRuntime.TryRequestLoadingDockReturn();
+                PrototypeSessionRuntime.TryToggleLoadingDock(catalog, physicalLaneCount);
             }
         }
 
@@ -139,12 +160,12 @@ namespace ClikerSlash.Battle
             var movementControls = "Controls: A / D or Left / Right";
             if (!loadingDockState.HasLoadingDockAccess)
             {
-                return movementControls;
+                return $"{movementControls} / Esc: Pause";
             }
 
             return loadingDockState.CurrentArea == WorkAreaType.LoadingDock
-                ? $"{movementControls} / Esc: Return To Lane"
-                : $"{movementControls} / Q: Loading Dock";
+                ? $"{movementControls} / Q: Return To Lane / Esc: Pause"
+                : $"{movementControls} / Q: Loading Dock / Esc: Pause";
         }
 
         private void OnGUI()
@@ -165,6 +186,12 @@ namespace ClikerSlash.Battle
             }
 
             var outcome = battleQuery.GetSingleton<BattleOutcomeState>();
+            if (outcome.HasOutcome == 0 && PrototypeSessionRuntime.IsPauseMenuOpen)
+            {
+                DrawPausePopup();
+                return;
+            }
+
             if (outcome.HasOutcome == 0)
             {
                 return;
@@ -198,6 +225,39 @@ namespace ClikerSlash.Battle
             GUILayout.EndArea();
         }
 
+        private void DrawPausePopup()
+        {
+            EnsureStyles();
+
+            var popupWidth = Mathf.Clamp(Screen.width * 0.28f, 320f, 460f);
+            var popupHeight = 220f;
+            var popupRect = new Rect(
+                (Screen.width - popupWidth) * 0.5f,
+                (Screen.height - popupHeight) * 0.5f,
+                popupWidth,
+                popupHeight);
+
+            GUI.Box(new Rect(0f, 0f, Screen.width, Screen.height), string.Empty);
+            GUILayout.BeginArea(popupRect, GUI.skin.window);
+            GUILayout.Space(8f);
+            GUILayout.Label("일시정지", _popupTitleStyle);
+            GUILayout.Space(18f);
+
+            if (GUILayout.Button("재개하기", _buttonStyle, GUILayout.Height(44f)))
+            {
+                PrototypeSessionRuntime.ClosePauseMenu();
+            }
+
+            GUILayout.Space(10f);
+            if (GUILayout.Button("허브로가기", _buttonStyle, GUILayout.Height(44f)))
+            {
+                PrototypeSessionRuntime.ClosePauseMenu();
+                PrototypeSceneNavigator.LoadHubScene();
+            }
+
+            GUILayout.EndArea();
+        }
+
         private void EnsureStyles()
         {
             if (_labelStyle != null)
@@ -218,6 +278,13 @@ namespace ClikerSlash.Battle
             };
 
             _buttonStyle.margin = new RectOffset(0, 0, 0, 0);
+
+            _popupTitleStyle = new GUIStyle(_labelStyle)
+            {
+                fontSize = 30,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
         }
     }
 }

@@ -62,6 +62,11 @@ namespace ClikerSlash.Battle
             }
 
             _wasLoadingDockActive = true;
+            if (PrototypeSessionRuntime.IsPauseMenuOpen)
+            {
+                return;
+            }
+
             HandlePointerInput();
             RefreshCargoViews();
             TryQueueRoundCompletion();

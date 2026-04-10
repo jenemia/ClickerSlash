@@ -12,6 +12,7 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static void LoadHubScene()
         {
+            PrototypeSessionRuntime.ClosePauseMenu();
             SceneManager.LoadScene(PrototypeSessionRuntime.HubSceneName);
         }
 
@@ -21,6 +22,7 @@ namespace ClikerSlash.Battle
         public static void LoadBattleScene()
         {
             // 이 런타임 플래그는 전투 씬이 올라오면서 부트스트랩 단계에서 소비됩니다.
+            PrototypeSessionRuntime.ClosePauseMenu();
             PrototypeSessionRuntime.RequestBattleEntry();
             SceneManager.LoadScene(PrototypeSessionRuntime.BattleSceneName);
         }

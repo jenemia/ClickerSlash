@@ -34,6 +34,11 @@ namespace ClikerSlash.Battle
 
         private void Update()
         {
+            if (PrototypeSessionRuntime.IsPauseMenuOpen)
+            {
+                return;
+            }
+
             PrototypeSessionRuntime.AdvanceLoadingDockTransition(Mathf.Max(Time.unscaledDeltaTime, 1f / 60f));
             SyncLoadingDockCamera();
 
