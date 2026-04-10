@@ -14,7 +14,7 @@ namespace ClikerSlash.Battle
     public sealed class BattlePresentationBridge : MonoBehaviour
     {
         [SerializeField] private GameObject playerViewPrefab;
-        [SerializeField] private GameObject cargoViewPrefab;
+        [SerializeField] private CargoVisualPrefabSet cargoVisualPrefabs;
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private BattleViewAuthoring battleView;
         [SerializeField] private LoadingDockEnvironmentAuthoring loadingDockEnvironment;
@@ -72,6 +72,15 @@ namespace ClikerSlash.Battle
             EnsureCameraRigInitialized();
         }
 
+        /// <summary>
+        /// 레인과 상하차가 공유하는 물류 프리팹 세트를 명시적으로 연결합니다.
+        /// </summary>
+        public void BindVisualPrefabs(GameObject targetPlayerViewPrefab, CargoVisualPrefabSet targetCargoVisualPrefabs)
+        {
+            playerViewPrefab = targetPlayerViewPrefab;
+            cargoVisualPrefabs = targetCargoVisualPrefabs;
+        }
+
         private bool TryPrepareQueries(out EntityManager entityManager)
         {
             var world = World.DefaultGameObjectInjectionWorld;
@@ -93,6 +102,7 @@ namespace ClikerSlash.Battle
                 ComponentType.ReadOnly<LocalTransform>());
             _cargoQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<CargoTag>(),
+                ComponentType.ReadOnly<CargoKind>(),
                 ComponentType.ReadOnly<LocalTransform>());
             return true;
         }
@@ -140,9 +150,6 @@ namespace ClikerSlash.Battle
         {
             if (_cameraRigInitialized &&
                 sceneCamera != null &&
-                battleView != null &&
-                loadingDockEnvironment != null &&
-                loadingDockEnvironment.cameraAnchor != null &&
                 laneVirtualCamera != null &&
                 loadingDockVirtualCamera != null)
             {
@@ -150,15 +157,10 @@ namespace ClikerSlash.Battle
             }
 
             sceneCamera ??= Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
-            battleView ??= FindFirstObjectByType<BattleViewAuthoring>();
-            loadingDockEnvironment ??= FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
             laneVirtualCamera ??= FindVirtualCamera("LaneVirtualCamera");
             loadingDockVirtualCamera ??= FindVirtualCamera("LoadingDockVirtualCamera");
 
             if (sceneCamera == null ||
-                battleView == null ||
-                loadingDockEnvironment == null ||
-                loadingDockEnvironment.cameraAnchor == null ||
                 laneVirtualCamera == null ||
                 loadingDockVirtualCamera == null)
             {
@@ -169,17 +171,6 @@ namespace ClikerSlash.Battle
             brain.DefaultBlend = new CinemachineBlendDefinition(
                 CinemachineBlendDefinition.Styles.EaseInOut,
                 Mathf.Max(0.05f, loadingDockTransitionDuration));
-
-            ConfigureVirtualCamera(
-                laneVirtualCamera,
-                battleView.CameraPosition,
-                Quaternion.Euler(battleView.CameraRotation),
-                battleView.CameraFieldOfView);
-            ConfigureVirtualCamera(
-                loadingDockVirtualCamera,
-                loadingDockEnvironment.cameraAnchor.position,
-                loadingDockEnvironment.cameraAnchor.rotation,
-                battleView.CameraFieldOfView);
 
             _cameraRigInitialized = true;
             _dockCameraIsLive = false;
@@ -202,31 +193,15 @@ namespace ClikerSlash.Battle
             return null;
         }
 
-        private static void ConfigureVirtualCamera(
-            CinemachineCamera virtualCamera,
-            Vector3 position,
-            Quaternion rotation,
-            float fieldOfView)
-        {
-            if (virtualCamera == null)
-            {
-                return;
-            }
-
-            virtualCamera.transform.SetPositionAndRotation(position, rotation);
-            var lens = virtualCamera.Lens;
-            lens.FieldOfView = fieldOfView;
-            virtualCamera.Lens = lens;
-        }
-
         private void SyncCargo(EntityManager entityManager)
         {
-            if (cargoViewPrefab == null)
+            if (cargoVisualPrefabs == null || !cargoVisualPrefabs.IsComplete)
             {
                 return;
             }
 
             using var entities = _cargoQuery.ToEntityArray(Allocator.Temp);
+            using var kinds = _cargoQuery.ToComponentDataArray<CargoKind>(Allocator.Temp);
             using var transforms = _cargoQuery.ToComponentDataArray<LocalTransform>(Allocator.Temp);
             var alive = new HashSet<Entity>();
 
@@ -234,10 +209,15 @@ namespace ClikerSlash.Battle
             {
                 var cargoEntity = entities[i];
                 alive.Add(cargoEntity);
+                var prefab = cargoVisualPrefabs.Resolve(kinds[i].Value);
+                if (prefab == null)
+                {
+                    continue;
+                }
 
                 if (!_cargoInstances.TryGetValue(cargoEntity, out var cargoView) || cargoView == null)
                 {
-                    cargoView = Instantiate(cargoViewPrefab, transform);
+                    cargoView = Instantiate(prefab, transform);
                     cargoView.name = $"CargoView_{cargoEntity.Index}";
                     _cargoInstances[cargoEntity] = cargoView;
                 }

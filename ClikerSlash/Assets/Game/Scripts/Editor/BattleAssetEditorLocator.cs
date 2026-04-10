@@ -36,8 +36,14 @@ namespace ClikerSlash.Editor
             {
                 ClikerSlash.Battle.BattleAssetKeys.PlayerView => PrefabDirectoryPath + "/PlayerCube.prefab",
                 ClikerSlash.Battle.BattleAssetKeys.CargoView => PrefabDirectoryPath + "/CargoCube.prefab",
+                ClikerSlash.Battle.BattleAssetKeys.StandardCargoView => PrefabDirectoryPath + "/CargoCube.prefab",
+                ClikerSlash.Battle.BattleAssetKeys.FragileCargoView => PrefabDirectoryPath + "/CargoFragileCube.prefab",
+                ClikerSlash.Battle.BattleAssetKeys.HeavyCargoView => PrefabDirectoryPath + "/CargoHeavyCube.prefab",
                 ClikerSlash.Battle.BattleAssetKeys.PlayerMaterial => MaterialDirectoryPath + "/PlayerCube.mat",
                 ClikerSlash.Battle.BattleAssetKeys.CargoMaterial => MaterialDirectoryPath + "/CargoCube.mat",
+                ClikerSlash.Battle.BattleAssetKeys.StandardCargoMaterial => MaterialDirectoryPath + "/CargoCube.mat",
+                ClikerSlash.Battle.BattleAssetKeys.FragileCargoMaterial => MaterialDirectoryPath + "/CargoFragileCube.mat",
+                ClikerSlash.Battle.BattleAssetKeys.HeavyCargoMaterial => MaterialDirectoryPath + "/CargoHeavyCube.mat",
                 ClikerSlash.Battle.BattleAssetKeys.LaneMaterial => MaterialDirectoryPath + "/LaneStrip.mat",
                 ClikerSlash.Battle.BattleAssetKeys.AccentMaterial => MaterialDirectoryPath + "/LineAccent.mat",
                 _ => throw new ArgumentOutOfRangeException(nameof(assetKey), assetKey, "등록되지 않은 전투 자산 키입니다.")

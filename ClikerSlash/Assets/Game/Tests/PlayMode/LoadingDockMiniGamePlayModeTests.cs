@@ -35,7 +35,11 @@ namespace ClikerSlash.Tests.PlayMode
         public IEnumerator CargoViewPoolReusesReleasedViewsByKind()
         {
             var root = new GameObject("CargoViewPoolRoot").transform;
-            var pool = new LoadingDockCargoViewPool();
+            var prefabSet = CargoVisualPrefabSet.Create(
+                CreateCargoPrefab("StandardCargoPrefab", Color.yellow, new Vector3(0.9f, 0.9f, 0.9f)),
+                CreateCargoPrefab("FragileCargoPrefab", Color.cyan, new Vector3(0.82f, 0.82f, 0.82f)),
+                CreateCargoPrefab("HeavyCargoPrefab", Color.gray, new Vector3(1.08f, 1.08f, 1.08f)));
+            var pool = new LoadingDockCargoViewPool(prefabSet);
 
             var firstStandard = pool.Acquire(1, LoadingDockCargoKind.Standard, root, Vector3.zero);
             var firstFragile = pool.Acquire(2, LoadingDockCargoKind.Fragile, root, Vector3.one);
@@ -54,9 +58,28 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(reusedFragile.Kind, Is.EqualTo(LoadingDockCargoKind.Fragile));
             Assert.That(reusedStandard.gameObject.activeSelf, Is.True);
             Assert.That(reusedFragile.gameObject.activeSelf, Is.True);
+            Assert.That(reusedStandard.GetComponent<Collider>(), Is.Not.Null);
+            Assert.That(reusedFragile.GetComponent<Collider>(), Is.Not.Null);
 
             Object.Destroy(root.gameObject);
+            Object.Destroy(prefabSet.StandardPrefab);
+            Object.Destroy(prefabSet.FragilePrefab);
+            Object.Destroy(prefabSet.HeavyPrefab);
             yield return null;
+        }
+
+        private static GameObject CreateCargoPrefab(string name, Color color, Vector3 scale)
+        {
+            var prefab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            prefab.name = name;
+            prefab.transform.localScale = scale;
+            prefab.AddComponent<LoadingDockCargoView>();
+            var renderer = prefab.GetComponent<Renderer>();
+            renderer.sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+            {
+                color = color
+            };
+            return prefab;
         }
     }
 }

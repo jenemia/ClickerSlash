@@ -11,7 +11,6 @@ namespace ClikerSlash.Battle
         public Transform truckBayRoot;
         public Transform cargoThrowOrigin;
         public Transform truckDropZone;
-        public Transform cameraAnchor;
         public Transform[] cargoSlotAnchors;
     }
 }

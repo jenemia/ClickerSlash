@@ -29,6 +29,8 @@ namespace ClikerSlash.Battle
                 return;
             }
 
+            var isMovementLocked = PrototypeSessionRuntime.IsLaneMovementLocked();
+
             var laneCount = SystemAPI.GetSingleton<LaneLayout>().LaneCount;
             if (SystemAPI.HasSingleton<SessionRuleState>())
             {
@@ -41,6 +43,12 @@ namespace ClikerSlash.Battle
                          .Query<RefRW<LaneMoveState>, RefRW<LaneIndex>, DynamicBuffer<LaneMoveCommandBufferElement>>()
                          .WithAll<PlayerTag>())
             {
+                if (isMovementLocked)
+                {
+                    moveCommands.Clear();
+                    continue;
+                }
+
                 // 이전 이동이 아직 끝나지 않았다면 새 큐 명령을 시작하지 않습니다.
                 if (moveState.ValueRO.IsMoving != 0 || moveCommands.Length == 0)
                 {

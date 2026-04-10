@@ -23,7 +23,8 @@ namespace ClikerSlash.Battle
         /// </summary>
         public void OnUpdate(ref SystemState state)
         {
-            if (SystemAPI.GetSingleton<StageProgressState>().IsFinished != 0)
+            if (SystemAPI.GetSingleton<StageProgressState>().IsFinished != 0 ||
+                PrototypeSessionRuntime.IsLaneMovementLocked())
             {
                 return;
             }

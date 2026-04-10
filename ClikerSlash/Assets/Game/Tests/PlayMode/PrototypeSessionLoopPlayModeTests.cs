@@ -351,7 +351,9 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(snapshot.MaxActiveSlotCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
             Assert.That(activeEntries.Length, Is.EqualTo(5));
             Assert.That(backlogEntries.Length, Is.EqualTo(2));
+            Assert.That(activeEntries[0].SlotIndex, Is.EqualTo(0));
             Assert.That(activeEntries[0].EntryId, Is.EqualTo(1));
+            Assert.That(activeEntries[4].SlotIndex, Is.EqualTo(4));
             Assert.That(activeEntries[4].EntryId, Is.EqualTo(5));
             Assert.That(backlogEntries[0].EntryId, Is.EqualTo(6));
             Assert.That(backlogEntries[1].EntryId, Is.EqualTo(7));
@@ -390,7 +392,56 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(1));
             Assert.That(snapshot.BacklogCount, Is.Zero);
             Assert.That(activeEntries.Length, Is.EqualTo(1));
+            Assert.That(activeEntries[0].SlotIndex, Is.EqualTo(0));
             Assert.That(activeEntries[0].Kind, Is.EqualTo(LoadingDockCargoKind.Fragile));
+        }
+
+        /// <summary>
+        /// 상하차 진입이 시작되면 대기 중 명령을 비우고 진행 중 레인 이동도 현재 확정 레인으로 즉시 취소해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockEntryClearsQueuedLaneMovesAndCancelsInterpolation()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var playerEntity = entityManager.CreateEntityQuery(typeof(PlayerTag)).GetSingletonEntity();
+            var laneEntity = entityManager.CreateEntityQuery(typeof(LaneLayout)).GetSingletonEntity();
+            var laneXs = entityManager.GetBuffer<LaneWorldXElement>(laneEntity);
+            var currentLane = entityManager.GetComponentData<LaneIndex>(playerEntity).Value;
+            var currentLaneX = BattleLaneUtility.GetLaneX(laneXs, currentLane);
+
+            entityManager.SetComponentData(playerEntity, new LaneMoveState
+            {
+                StartLane = currentLane,
+                TargetLane = math.min(currentLane + 1, laneXs.Length - 1),
+                Progress = 0.5f,
+                IsMoving = 1
+            });
+            var transform = entityManager.GetComponentData<LocalTransform>(playerEntity);
+            transform.Position.x = currentLaneX + 1.6f;
+            entityManager.SetComponentData(playerEntity, transform);
+
+            var moveCommands = entityManager.GetBuffer<LaneMoveCommandBufferElement>(playerEntity);
+            moveCommands.Add(new LaneMoveCommandBufferElement { Direction = 1 });
+            moveCommands.Add(new LaneMoveCommandBufferElement { Direction = -1 });
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+
+            moveCommands = entityManager.GetBuffer<LaneMoveCommandBufferElement>(playerEntity);
+            var moveState = entityManager.GetComponentData<LaneMoveState>(playerEntity);
+            transform = entityManager.GetComponentData<LocalTransform>(playerEntity);
+
+            Assert.That(moveCommands.Length, Is.Zero);
+            Assert.That(moveState.IsMoving, Is.Zero);
+            Assert.That(moveState.StartLane, Is.EqualTo(currentLane));
+            Assert.That(moveState.TargetLane, Is.EqualTo(currentLane));
+            Assert.That(moveState.Progress, Is.Zero);
+            Assert.That(transform.Position.x, Is.EqualTo(currentLaneX).Within(0.001f));
         }
 
         /// <summary>
@@ -419,7 +470,7 @@ namespace ClikerSlash.Tests.PlayMode
         /// 상하차 진입/복귀 요청이 도크 카메라 앵커와 레인 카메라 사이를 Cinemachine으로 전환하는지 검증합니다.
         /// </summary>
         [UnityTest]
-        public IEnumerator LoadingDockCameraTransitionTargetsAnchorAndReturns()
+        public IEnumerator LoadingDockCameraTransitionTargetsVirtualCameraAndReturns()
         {
             PrototypeSessionRuntime.ResetPrototypeState();
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
@@ -454,12 +505,6 @@ namespace ClikerSlash.Tests.PlayMode
             truckDropZone.SetParent(truckBayRoot, false);
             loadingDockEnvironment.truckDropZone = truckDropZone;
 
-            var cameraAnchor = new GameObject("LoadingDockCameraAnchor").transform;
-            cameraAnchor.SetParent(loadingDockEnvironmentObject.transform, false);
-            cameraAnchor.localPosition = new Vector3(-1.2f, 12.2f, -14.5f);
-            cameraAnchor.localRotation = Quaternion.Euler(36f, 18f, 0f);
-            loadingDockEnvironment.cameraAnchor = cameraAnchor;
-
             var laneVirtualCamera = CreatePassiveVirtualCamera(
                 "LaneVirtualCamera",
                 battleView.CameraPosition,
@@ -468,8 +513,8 @@ namespace ClikerSlash.Tests.PlayMode
                 20);
             var loadingDockVirtualCamera = CreatePassiveVirtualCamera(
                 "LoadingDockVirtualCamera",
-                cameraAnchor.position,
-                cameraAnchor.rotation,
+                new Vector3(13.64f, 11.22f, -9.6f),
+                Quaternion.Euler(39.583f, 18f, 0f),
                 battleView.CameraFieldOfView,
                 10);
 
@@ -479,7 +524,13 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
             yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 60);
-            yield return WaitForCameraPose(camera, cameraAnchor.position, cameraAnchor.rotation, 60);
+            yield return WaitForCameraPose(
+                camera,
+                loadingDockVirtualCamera.transform.position,
+                loadingDockVirtualCamera.transform.rotation,
+                60,
+                1.5f,
+                2.5f);
             Assert.That(brain.ActiveVirtualCamera, Is.SameAs(loadingDockVirtualCamera));
 
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
@@ -488,7 +539,9 @@ namespace ClikerSlash.Tests.PlayMode
                 camera,
                 battleView.CameraPosition,
                 Quaternion.Euler(battleView.CameraRotation),
-                60);
+                60,
+                1.5f,
+                2.5f);
             Assert.That(brain.ActiveVirtualCamera, Is.SameAs(laneVirtualCamera));
 
             Object.Destroy(cameraObject);
@@ -497,6 +550,46 @@ namespace ClikerSlash.Tests.PlayMode
             Object.Destroy(laneVirtualCamera.gameObject);
             Object.Destroy(loadingDockVirtualCamera.gameObject);
             Object.Destroy(bridgeObject);
+        }
+
+        /// <summary>
+        /// 같은 kind의 물류는 레인과 상하차 구역에서 같은 프리팹 외형을 공유해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LaneAndLoadingDockCargoUseSameVisualPrefabForKind()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            FreezeRandomSpawns(entityManager);
+
+            var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
+            SpawnCargo(entityManager, 1, battleConfig.JudgmentLineZ + 1.25f, 6, 50, 20, 0f, LoadingDockCargoKind.Fragile);
+            yield return null;
+            yield return null;
+
+            var laneCargoView = FindLaneCargoView();
+            Assert.That(laneCargoView, Is.Not.Null);
+            var laneRenderer = laneCargoView.GetComponent<Renderer>();
+            Assert.That(laneRenderer, Is.Not.Null);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+            yield return null;
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            var cargoViewRoot = presenter != null ? presenter.transform.Find("LoadingDockCargoViewRoot") : null;
+            Assert.That(cargoViewRoot, Is.Not.Null);
+            Assert.That(cargoViewRoot.childCount, Is.GreaterThan(0));
+
+            var dockCargoView = cargoViewRoot.GetChild(0).GetComponent<Renderer>();
+            Assert.That(dockCargoView, Is.Not.Null);
+            Assert.That(dockCargoView.sharedMaterial, Is.SameAs(laneRenderer.sharedMaterial));
+            Assert.That(cargoViewRoot.GetChild(0).localScale, Is.EqualTo(laneCargoView.transform.localScale));
         }
 
         /// <summary>
@@ -514,7 +607,6 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockEnvironment.truckBayRoot, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoThrowOrigin, Is.Not.Null);
             Assert.That(loadingDockEnvironment.truckDropZone, Is.Not.Null);
-            Assert.That(loadingDockEnvironment.cameraAnchor, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors.Length, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
             foreach (var slotAnchor in loadingDockEnvironment.cargoSlotAnchors)
@@ -563,8 +655,11 @@ namespace ClikerSlash.Tests.PlayMode
             var environment = Object.FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
             Assert.That(activeDockCamera, Is.Not.Null);
             Assert.That(environment, Is.Not.Null);
-            Assert.That(environment.cameraAnchor, Is.Not.Null);
-            yield return WaitForCameraPose(mainCamera, environment.cameraAnchor.position, environment.cameraAnchor.rotation, 120);
+            yield return WaitForCameraPose(
+                mainCamera,
+                activeDockCamera.transform.position,
+                activeDockCamera.transform.rotation,
+                120);
             Assert.That(brain.ActiveVirtualCamera, Is.SameAs(activeDockCamera));
 
             var cargoViewport = mainCamera.WorldToViewportPoint(environment.cargoBayRoot.position);
@@ -613,6 +708,33 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
+        /// 레인 상태에서도 상하차 적재장 뷰는 세션 큐와 동기화된 채 유지되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockPresenterShowsQueuedCargoBeforeDockEntry()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            yield return null;
+            yield return null;
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            var cargoViewRoot = presenter != null ? presenter.transform.Find("LoadingDockCargoViewRoot") : null;
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            var runtimeState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
+
+            Assert.That(runtimeState.CurrentArea, Is.EqualTo(WorkAreaType.Lane));
+            Assert.That(runtimeState.TransitionPhase, Is.EqualTo(WorkAreaTransitionPhase.None));
+            Assert.That(activeEntries.Length, Is.EqualTo(3));
+            Assert.That(cargoViewRoot, Is.Not.Null);
+            Assert.That(cargoViewRoot.childCount, Is.EqualTo(3));
+        }
+
+        /// <summary>
         /// delivered 처리 시 활성 슬롯은 즉시 보충되고 backlog는 FIFO로 감소해야 합니다.
         /// </summary>
         [UnityTest]
@@ -637,7 +759,12 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
             Assert.That(snapshot.BacklogCount, Is.EqualTo(1));
+            Assert.That(activeEntries[0].EntryId, Is.EqualTo(1));
+            Assert.That(activeEntries[1].EntryId, Is.EqualTo(2));
+            Assert.That(activeEntries[2].SlotIndex, Is.EqualTo(2));
             Assert.That(activeEntries[2].EntryId, Is.EqualTo(6));
+            Assert.That(activeEntries[3].EntryId, Is.EqualTo(4));
+            Assert.That(activeEntries[4].EntryId, Is.EqualTo(5));
             yield return null;
         }
 
@@ -675,6 +802,7 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
             Assert.That(snapshot.BacklogCount, Is.Zero);
+            Assert.That(activeEntries[0].SlotIndex, Is.EqualTo(0));
             Assert.That(activeEntries[0].EntryId, Is.EqualTo(6));
             Assert.That(cargoViewRoot, Is.Not.Null);
             Assert.That(cargoViewRoot.childCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
@@ -734,8 +862,11 @@ namespace ClikerSlash.Tests.PlayMode
             var reenteredEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
 
             Assert.That(reenteredEntries.Length, Is.EqualTo(3));
+            Assert.That(reenteredEntries[0].SlotIndex, Is.EqualTo(firstActiveEntries[0].SlotIndex));
             Assert.That(reenteredEntries[0].EntryId, Is.EqualTo(firstActiveEntries[0].EntryId));
+            Assert.That(reenteredEntries[1].SlotIndex, Is.EqualTo(firstActiveEntries[1].SlotIndex));
             Assert.That(reenteredEntries[1].EntryId, Is.EqualTo(firstActiveEntries[1].EntryId));
+            Assert.That(reenteredEntries[2].SlotIndex, Is.EqualTo(firstActiveEntries[2].SlotIndex));
             Assert.That(reenteredEntries[2].EntryId, Is.EqualTo(firstActiveEntries[2].EntryId));
             Assert.That(cargoViewRoot, Is.Not.Null);
             Assert.That(cargoViewRoot.childCount, Is.EqualTo(3));
@@ -765,7 +896,15 @@ namespace ClikerSlash.Tests.PlayMode
             entityManager.SetComponentData(spawnEntity, spawnTimer);
         }
 
-        private static void SpawnCargo(EntityManager entityManager, int laneIndex, float zPosition, int weight, int reward, int penalty, float moveSpeed)
+        private static void SpawnCargo(
+            EntityManager entityManager,
+            int laneIndex,
+            float zPosition,
+            int weight,
+            int reward,
+            int penalty,
+            float moveSpeed,
+            LoadingDockCargoKind kind = LoadingDockCargoKind.Standard)
         {
             var laneEntity = entityManager.CreateEntityQuery(typeof(LaneLayout)).GetSingletonEntity();
             var laneXs = entityManager.GetBuffer<LaneWorldXElement>(laneEntity);
@@ -780,11 +919,31 @@ namespace ClikerSlash.Tests.PlayMode
             entityManager.AddComponentData(cargoEntity, new CargoWeight { Value = weight });
             entityManager.AddComponentData(cargoEntity, new CargoReward { Value = reward });
             entityManager.AddComponentData(cargoEntity, new CargoPenalty { Value = penalty });
-            entityManager.AddComponentData(cargoEntity, new CargoKind { Value = LoadingDockCargoKind.Standard });
+            entityManager.AddComponentData(cargoEntity, new CargoKind { Value = kind });
             entityManager.AddComponentData(cargoEntity, LocalTransform.FromPositionRotationScale(
                 new float3(laneX, cargoConfig.Y, zPosition),
                 quaternion.identity,
                 1f));
+        }
+
+        private static GameObject FindLaneCargoView()
+        {
+            var bridge = Object.FindFirstObjectByType<BattlePresentationBridge>();
+            if (bridge == null)
+            {
+                return null;
+            }
+
+            for (var index = 0; index < bridge.transform.childCount; index += 1)
+            {
+                var child = bridge.transform.GetChild(index);
+                if (child.name.StartsWith("CargoView_", System.StringComparison.Ordinal))
+                {
+                    return child.gameObject;
+                }
+            }
+
+            return null;
         }
 
         private static void SeedRuntimeCurrency(int amount)
@@ -824,10 +983,10 @@ namespace ClikerSlash.Tests.PlayMode
             Camera camera,
             Vector3 expectedPosition,
             Quaternion expectedRotation,
-            int maxFrames)
+            int maxFrames,
+            float positionTolerance = 0.4f,
+            float rotationTolerance = 1.5f)
         {
-            const float positionTolerance = 0.4f;
-            const float rotationTolerance = 1.5f;
             for (var frame = 0; frame < maxFrames; frame += 1)
             {
                 if (Vector3.Distance(camera.transform.position, expectedPosition) <= positionTolerance &&

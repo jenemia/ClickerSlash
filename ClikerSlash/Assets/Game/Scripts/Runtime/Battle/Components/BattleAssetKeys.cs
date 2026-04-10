@@ -7,8 +7,14 @@ namespace ClikerSlash.Battle
     {
         public const string PlayerView = "battle/player_view";
         public const string CargoView = "battle/cargo_view";
+        public const string StandardCargoView = "battle/cargo_view_standard";
+        public const string FragileCargoView = "battle/cargo_view_fragile";
+        public const string HeavyCargoView = "battle/cargo_view_heavy";
         public const string PlayerMaterial = "battle/materials/player_cube";
         public const string CargoMaterial = "battle/materials/cargo_cube";
+        public const string StandardCargoMaterial = "battle/materials/cargo_cube_standard";
+        public const string FragileCargoMaterial = "battle/materials/cargo_cube_fragile";
+        public const string HeavyCargoMaterial = "battle/materials/cargo_cube_heavy";
         public const string LaneMaterial = "battle/materials/lane_strip";
         public const string AccentMaterial = "battle/materials/line_accent";
     }

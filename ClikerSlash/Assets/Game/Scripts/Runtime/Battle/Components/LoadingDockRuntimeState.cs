@@ -52,6 +52,16 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
+    /// 상하차 적재장의 고정 slot과 엔트리 매핑을 노출하는 런타임 스냅샷입니다.
+    /// </summary>
+    public struct LoadingDockActiveCargoSlotSnapshot
+    {
+        public int SlotIndex;
+        public int EntryId;
+        public LoadingDockCargoKind Kind;
+    }
+
+    /// <summary>
     /// 현재 상하차 큐의 backlog/활성 슬롯 상태를 요약합니다.
     /// </summary>
     public struct LoadingDockQueueSnapshot

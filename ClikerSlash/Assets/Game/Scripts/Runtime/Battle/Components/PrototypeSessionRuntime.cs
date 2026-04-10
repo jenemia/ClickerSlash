@@ -42,7 +42,7 @@ namespace ClikerSlash.Battle
         private static bool _hasPendingLoadingDockReturnRequest;
         private static float _loadingDockTransitionElapsed;
         private static readonly Queue<LoadingDockCargoQueueEntry> _loadingDockBacklogQueue = new();
-        private static readonly List<LoadingDockCargoQueueEntry> _loadingDockActiveSlots = new();
+        private static readonly LoadingDockCargoQueueEntry?[] _loadingDockActiveSlots = new LoadingDockCargoQueueEntry?[MaxLoadingDockActiveSlotCount];
         private static int _nextLoadingDockCargoEntryId = 1;
 
         private static MetaProgressionRuntimeState _metaProgressionRuntimeState;
@@ -130,21 +130,47 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static LoadingDockQueueSnapshot GetLoadingDockQueueSnapshot()
         {
+            var activeSlotCount = 0;
+            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
+            {
+                if (_loadingDockActiveSlots[slotIndex].HasValue)
+                {
+                    activeSlotCount += 1;
+                }
+            }
+
             return new LoadingDockQueueSnapshot
             {
                 BacklogCount = _loadingDockBacklogQueue.Count,
-                ActiveSlotCount = _loadingDockActiveSlots.Count,
+                ActiveSlotCount = activeSlotCount,
                 MaxActiveSlotCount = MaxLoadingDockActiveSlotCount,
-                TotalCount = _loadingDockActiveSlots.Count + _loadingDockBacklogQueue.Count
+                TotalCount = activeSlotCount + _loadingDockBacklogQueue.Count
             };
         }
 
         /// <summary>
         /// 현재 활성 슬롯에 배치된 상하차 물류 엔트리 복사본을 반환합니다.
         /// </summary>
-        public static LoadingDockCargoQueueEntry[] GetLoadingDockActiveCargoEntries()
+        public static LoadingDockActiveCargoSlotSnapshot[] GetLoadingDockActiveCargoEntries()
         {
-            return _loadingDockActiveSlots.ToArray();
+            var activeEntries = new List<LoadingDockActiveCargoSlotSnapshot>(MaxLoadingDockActiveSlotCount);
+            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
+            {
+                if (!_loadingDockActiveSlots[slotIndex].HasValue)
+                {
+                    continue;
+                }
+
+                var entry = _loadingDockActiveSlots[slotIndex].Value;
+                activeEntries.Add(new LoadingDockActiveCargoSlotSnapshot
+                {
+                    SlotIndex = slotIndex,
+                    EntryId = entry.EntryId,
+                    Kind = entry.Kind
+                });
+            }
+
+            return activeEntries.ToArray();
         }
 
         /// <summary>
@@ -167,9 +193,10 @@ namespace ClikerSlash.Battle
             };
             _nextLoadingDockCargoEntryId += 1;
 
-            if (_loadingDockActiveSlots.Count < MaxLoadingDockActiveSlotCount)
+            var emptySlotIndex = FindFirstEmptyLoadingDockSlotIndex();
+            if (emptySlotIndex >= 0)
             {
-                _loadingDockActiveSlots.Add(queueEntry);
+                _loadingDockActiveSlots[emptySlotIndex] = queueEntry;
                 return;
             }
 
@@ -182,27 +209,24 @@ namespace ClikerSlash.Battle
         public static bool TryDeliverLoadingDockCargo(int entryId, out LoadingDockCargoQueueEntry deliveredEntry)
         {
             deliveredEntry = default;
-            for (var index = 0; index < _loadingDockActiveSlots.Count; index += 1)
+            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
             {
-                var activeEntry = _loadingDockActiveSlots[index];
+                if (!_loadingDockActiveSlots[slotIndex].HasValue)
+                {
+                    continue;
+                }
+
+                var activeEntry = _loadingDockActiveSlots[slotIndex].Value;
                 if (activeEntry.EntryId != entryId)
                 {
                     continue;
                 }
 
                 deliveredEntry = activeEntry;
-                _loadingDockActiveSlots.RemoveAt(index);
+                _loadingDockActiveSlots[slotIndex] = null;
                 if (_loadingDockBacklogQueue.Count > 0)
                 {
-                    var nextEntry = _loadingDockBacklogQueue.Dequeue();
-                    if (index <= _loadingDockActiveSlots.Count)
-                    {
-                        _loadingDockActiveSlots.Insert(index, nextEntry);
-                    }
-                    else
-                    {
-                        _loadingDockActiveSlots.Add(nextEntry);
-                    }
+                    _loadingDockActiveSlots[slotIndex] = _loadingDockBacklogQueue.Dequeue();
                 }
 
                 return true;
@@ -217,8 +241,25 @@ namespace ClikerSlash.Battle
         public static void ClearLoadingDockQueue()
         {
             _loadingDockBacklogQueue.Clear();
-            _loadingDockActiveSlots.Clear();
+            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
+            {
+                _loadingDockActiveSlots[slotIndex] = null;
+            }
+
             _nextLoadingDockCargoEntryId = 1;
+        }
+
+        private static int FindFirstEmptyLoadingDockSlotIndex()
+        {
+            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
+            {
+                if (!_loadingDockActiveSlots[slotIndex].HasValue)
+                {
+                    return slotIndex;
+                }
+            }
+
+            return -1;
         }
 
         /// <summary>
@@ -509,6 +550,16 @@ namespace ClikerSlash.Battle
 
             return _workAreaTransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock &&
                    TryRequestLoadingDockReturn();
+        }
+
+        /// <summary>
+        /// 상하차 구역 진입/체류/복귀 중에는 레인 이동 입력과 보간 이동을 모두 잠급니다.
+        /// </summary>
+        public static bool IsLaneMovementLocked()
+        {
+            return _workAreaTransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
+                   _workAreaTransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock ||
+                   _workAreaTransitionPhase == WorkAreaTransitionPhase.ReturningToLane;
         }
 
         /// <summary>

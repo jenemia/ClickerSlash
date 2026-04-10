@@ -9,7 +9,18 @@ namespace ClikerSlash.Battle
     public sealed class LoadingDockCargoViewPool
     {
         private readonly Dictionary<LoadingDockCargoKind, Stack<LoadingDockCargoView>> _poolByKind = new();
+        private CargoVisualPrefabSet _cargoVisualPrefabs;
         private Transform _poolRoot;
+
+        public LoadingDockCargoViewPool(CargoVisualPrefabSet cargoVisualPrefabs = null)
+        {
+            _cargoVisualPrefabs = cargoVisualPrefabs;
+        }
+
+        public void Configure(CargoVisualPrefabSet cargoVisualPrefabs)
+        {
+            _cargoVisualPrefabs = cargoVisualPrefabs;
+        }
 
         public LoadingDockCargoView Acquire(
             int entryId,
@@ -23,19 +34,17 @@ namespace ClikerSlash.Battle
                 view = CreateView(kind);
             }
 
+            if (view == null)
+            {
+                return null;
+            }
+
             var viewTransform = view.transform;
             viewTransform.SetParent(parent, false);
             viewTransform.position = position;
-            viewTransform.localScale = ResolveCargoScale(kind);
             view.gameObject.name = $"LoadingDockCargo_{entryId}";
             view.gameObject.SetActive(true);
             view.Bind(entryId, kind);
-
-            var renderer = view.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.material.color = ResolveCargoColor(kind);
-            }
 
             return view;
         }
@@ -79,41 +88,19 @@ namespace ClikerSlash.Battle
             return _poolRoot;
         }
 
-        private static LoadingDockCargoView CreateView(LoadingDockCargoKind kind)
+        private LoadingDockCargoView CreateView(LoadingDockCargoKind kind)
         {
-            var cargoObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cargoObject.name = $"LoadingDockCargo_{kind}";
-            cargoObject.SetActive(false);
-
-            var view = cargoObject.AddComponent<LoadingDockCargoView>();
-            var renderer = cargoObject.GetComponent<Renderer>();
-            if (renderer != null)
+            var prefab = _cargoVisualPrefabs?.Resolve(kind);
+            if (prefab == null)
             {
-                renderer.material.color = ResolveCargoColor(kind);
+                Debug.LogWarning($"No cargo prefab configured for kind {kind}.");
+                return null;
             }
 
-            cargoObject.transform.localScale = ResolveCargoScale(kind);
-            return view;
-        }
-
-        private static Vector3 ResolveCargoScale(LoadingDockCargoKind kind)
-        {
-            return kind switch
-            {
-                LoadingDockCargoKind.Heavy => new Vector3(1.35f, 1.35f, 1.35f),
-                LoadingDockCargoKind.Fragile => new Vector3(1.15f, 1.15f, 1.15f),
-                _ => new Vector3(1.2f, 1.2f, 1.2f)
-            };
-        }
-
-        private static Color ResolveCargoColor(LoadingDockCargoKind kind)
-        {
-            return kind switch
-            {
-                LoadingDockCargoKind.Fragile => new Color(0.4f, 0.85f, 1f),
-                LoadingDockCargoKind.Heavy => new Color(0.72f, 0.72f, 0.72f),
-                _ => new Color(1f, 0.6f, 0.2f)
-            };
+            var cargoObject = Object.Instantiate(prefab);
+            cargoObject.name = $"LoadingDockCargo_{kind}";
+            cargoObject.SetActive(false);
+            return cargoObject.GetComponent<LoadingDockCargoView>() ?? cargoObject.AddComponent<LoadingDockCargoView>();
         }
     }
 }

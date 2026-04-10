@@ -11,17 +11,34 @@ namespace ClikerSlash.Battle
     {
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private LoadingDockEnvironmentAuthoring environment;
+        [SerializeField] private CargoVisualPrefabSet cargoVisualPrefabs;
         [SerializeField] [Min(0.1f)] private float fallbackSlotSpacing = 1.9f;
 
         private readonly Dictionary<int, LoadingDockCargoView> _cargoViews = new();
+        private readonly Dictionary<int, int> _slotByEntryId = new();
         private readonly LoadingDockCargoViewPool _cargoViewPool = new();
         private bool _wasLoadingDockActive;
         private Transform _cargoViewRoot;
 
-        public void BindSceneReferences(Camera targetCamera, LoadingDockEnvironmentAuthoring targetEnvironment)
+        public void BindSceneReferences(
+            Camera targetCamera,
+            LoadingDockEnvironmentAuthoring targetEnvironment,
+            CargoVisualPrefabSet targetCargoVisualPrefabs = null)
         {
             sceneCamera = targetCamera;
             environment = targetEnvironment;
+            if (targetCargoVisualPrefabs != null)
+            {
+                cargoVisualPrefabs = targetCargoVisualPrefabs;
+            }
+
+            _cargoViewPool.Configure(cargoVisualPrefabs);
+        }
+
+        public void BindCargoVisualPrefabs(CargoVisualPrefabSet targetCargoVisualPrefabs)
+        {
+            cargoVisualPrefabs = targetCargoVisualPrefabs;
+            _cargoViewPool.Configure(cargoVisualPrefabs);
         }
 
         private void Update()
@@ -34,19 +51,17 @@ namespace ClikerSlash.Battle
                 return;
             }
 
+            _cargoViewPool.Configure(cargoVisualPrefabs);
+
             var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
             var isLoadingDockActive = loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
                                       loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
-            if (!isLoadingDockActive)
-            {
-                _wasLoadingDockActive = false;
-                ClearCargoViews();
-                return;
-            }
-
-            _wasLoadingDockActive = true;
-            HandlePointerInput();
             SyncVisibleCargoViews();
+            _wasLoadingDockActive = isLoadingDockActive;
+            if (isLoadingDockActive)
+            {
+                HandlePointerInput();
+            }
         }
 
         private void OnGUI()
@@ -85,9 +100,9 @@ namespace ClikerSlash.Battle
             var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
             var staleEntryIds = new List<int>(_cargoViews.Keys);
 
-            for (var slotIndex = 0; slotIndex < activeEntries.Length; slotIndex += 1)
+            for (var activeEntryIndex = 0; activeEntryIndex < activeEntries.Length; activeEntryIndex += 1)
             {
-                var entry = activeEntries[slotIndex];
+                var entry = activeEntries[activeEntryIndex];
                 staleEntryIds.Remove(entry.EntryId);
 
                 if (!_cargoViews.TryGetValue(entry.EntryId, out var cargoView) || cargoView == null)
@@ -96,12 +111,18 @@ namespace ClikerSlash.Battle
                         entry.EntryId,
                         entry.Kind,
                         GetOrCreateCargoViewRoot(),
-                        ResolveSlotPosition(slotIndex));
+                        ResolveSlotPosition(entry.SlotIndex));
+                    if (cargoView == null)
+                    {
+                        continue;
+                    }
+
                     _cargoViews[entry.EntryId] = cargoView;
                 }
 
+                _slotByEntryId[entry.EntryId] = entry.SlotIndex;
                 cargoView.Bind(entry.EntryId, entry.Kind);
-                cargoView.transform.position = ResolveSlotPosition(slotIndex);
+                cargoView.transform.position = ResolveSlotPosition(entry.SlotIndex);
                 cargoView.gameObject.name = $"LoadingDockCargo_{entry.EntryId}";
             }
 
@@ -113,6 +134,7 @@ namespace ClikerSlash.Battle
                 }
 
                 _cargoViews.Remove(staleEntryId);
+                _slotByEntryId.Remove(staleEntryId);
             }
         }
 
@@ -123,7 +145,10 @@ namespace ClikerSlash.Battle
 
         private void HandlePointerInput()
         {
-            if (PrototypeSessionRuntime.IsPauseMenuOpen)
+            var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
+            if (PrototypeSessionRuntime.IsPauseMenuOpen ||
+                loadingDockState.CurrentArea != WorkAreaType.LoadingDock ||
+                loadingDockState.TransitionPhase != WorkAreaTransitionPhase.ActiveInLoadingDock)
             {
                 return;
             }
@@ -175,6 +200,7 @@ namespace ClikerSlash.Battle
             }
 
             _cargoViews.Clear();
+            _slotByEntryId.Clear();
         }
 
         private Transform GetOrCreateCargoViewRoot()

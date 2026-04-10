@@ -19,6 +19,8 @@ namespace ClikerSlash.Editor
     {
         private const string ScenePath = "Assets/Game/Scenes/PrototypeBattle.unity";
         private const string HubScenePath = "Assets/Game/Scenes/PrototypeHub.unity";
+        private static readonly Vector3 LoadingDockVirtualCameraPosition = new(13.64f, 11.22f, -9.6f);
+        private static readonly Vector3 LoadingDockVirtualCameraRotation = new(39.583f, 18f, 0f);
 
         [MenuItem("Tools/ClikerSlash/Build Prototype Battle Scene")]
         public static void BuildPrototypeBattleScene()
@@ -33,12 +35,19 @@ namespace ClikerSlash.Editor
             EnsureFolder("Assets/Game/UI");
 
             var workerMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.PlayerMaterial, new Color(0.20f, 0.90f, 1.00f));
-            var cargoMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.CargoMaterial, new Color(1.00f, 0.55f, 0.20f));
+            var standardCargoMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.StandardCargoMaterial, new Color(1.00f, 0.55f, 0.20f));
+            var fragileCargoMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.FragileCargoMaterial, new Color(0.40f, 0.85f, 1.00f));
+            var heavyCargoMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.HeavyCargoMaterial, new Color(0.72f, 0.72f, 0.72f));
+            var cargoMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.CargoMaterial, standardCargoMaterial.color);
             var laneMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.LaneMaterial, new Color(0.10f, 0.14f, 0.22f));
             var accentMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.AccentMaterial, new Color(0.95f, 0.75f, 0.10f));
 
-            var workerPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.PlayerView, workerMaterial, new Vector3(1.1f, 1.1f, 1.1f));
-            var cargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.CargoView, cargoMaterial, new Vector3(0.9f, 0.9f, 0.9f));
+            var workerPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.PlayerView, workerMaterial, new Vector3(1.1f, 1.1f, 1.1f), keepCollider: false, addCargoViewComponent: false);
+            var standardCargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.StandardCargoView, standardCargoMaterial, new Vector3(0.9f, 0.9f, 0.9f), keepCollider: true, addCargoViewComponent: true);
+            var fragileCargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.FragileCargoView, fragileCargoMaterial, new Vector3(0.82f, 0.82f, 0.82f), keepCollider: true, addCargoViewComponent: true);
+            var heavyCargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.HeavyCargoView, heavyCargoMaterial, new Vector3(1.08f, 1.08f, 1.08f), keepCollider: true, addCargoViewComponent: true);
+            GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.CargoView, standardCargoMaterial, new Vector3(0.9f, 0.9f, 0.9f), keepCollider: true, addCargoViewComponent: true);
+            var cargoVisualPrefabs = CargoVisualPrefabSet.Create(standardCargoPrefab, fragileCargoPrefab, heavyCargoPrefab);
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             scene.name = "PrototypeBattle";
@@ -49,7 +58,7 @@ namespace ClikerSlash.Editor
             var laneRoot = CreateLaneVisualRoot(battleView, laneMaterial, accentMaterial);
             var loadingDockEnvironment = CreateLoadingDockEnvironment(battleView, laneMaterial, accentMaterial, cargoMaterial, workerMaterial);
             CreateConfigRoots(battleView, laneRoot);
-            CreatePresentationRoot(workerPrefab, cargoPrefab, mainCamera, battleView, loadingDockEnvironment);
+            CreatePresentationRoot(workerPrefab, cargoVisualPrefabs, mainCamera, battleView, loadingDockEnvironment);
             CreateHudRoot();
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
@@ -272,11 +281,6 @@ namespace ClikerSlash.Editor
             truckDropZone.transform.localPosition = new Vector3(-1.4f, 1.2f, 0.8f);
             authoring.truckDropZone = truckDropZone.transform;
 
-            var cameraAnchor = new GameObject("LoadingDockCameraAnchor");
-            cameraAnchor.transform.SetParent(root.transform, false);
-            cameraAnchor.transform.localPosition = new Vector3(-1.2f, 12.2f, -14.5f);
-            cameraAnchor.transform.localRotation = Quaternion.Euler(36f, 18f, 0f);
-            authoring.cameraAnchor = cameraAnchor.transform;
             EditorUtility.SetDirty(authoring);
             return authoring;
         }
@@ -316,7 +320,7 @@ namespace ClikerSlash.Editor
 
         private static void CreatePresentationRoot(
             GameObject workerPrefab,
-            GameObject cargoPrefab,
+            CargoVisualPrefabSet cargoVisualPrefabs,
             Camera mainCamera,
             BattleViewAuthoring battleView,
             LoadingDockEnvironmentAuthoring loadingDockEnvironment)
@@ -335,8 +339,8 @@ namespace ClikerSlash.Editor
             var loadingDockVirtualCamera = CreateVirtualCamera(
                 "LoadingDockVirtualCamera",
                 presentationRoot.transform,
-                loadingDockEnvironment.cameraAnchor != null ? loadingDockEnvironment.cameraAnchor.position : battleView.CameraPosition,
-                loadingDockEnvironment.cameraAnchor != null ? loadingDockEnvironment.cameraAnchor.rotation : Quaternion.Euler(battleView.CameraRotation),
+                LoadingDockVirtualCameraPosition,
+                Quaternion.Euler(LoadingDockVirtualCameraRotation),
                 battleView.CameraFieldOfView,
                 10);
 
@@ -346,12 +350,8 @@ namespace ClikerSlash.Editor
                 loadingDockEnvironment,
                 laneVirtualCamera,
                 loadingDockVirtualCamera);
-            miniGamePresenter.BindSceneReferences(mainCamera, loadingDockEnvironment);
-
-            var workerField = typeof(BattlePresentationBridge).GetField("playerViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var cargoField = typeof(BattlePresentationBridge).GetField("cargoViewPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            workerField?.SetValue(bridge, workerPrefab);
-            cargoField?.SetValue(bridge, cargoPrefab);
+            bridge.BindVisualPrefabs(workerPrefab, cargoVisualPrefabs);
+            miniGamePresenter.BindSceneReferences(mainCamera, loadingDockEnvironment, cargoVisualPrefabs);
             EditorUtility.SetDirty(bridge);
             EditorUtility.SetDirty(miniGamePresenter);
         }
@@ -611,24 +611,68 @@ namespace ClikerSlash.Editor
             BattleAssetEditorLocator assetLocator,
             string assetKey,
             Material material,
-            Vector3 scale)
+            Vector3 scale,
+            bool keepCollider,
+            bool addCargoViewComponent)
         {
             var assetPath = assetLocator.GetEditorAssetPath(assetKey);
             var prefab = assetLocator.LoadAsset<GameObject>(assetKey);
-            if (prefab != null)
+            if (prefab != null && AssetDatabase.LoadAssetAtPath<GameObject>(assetPath) != null)
             {
+                var prefabRoot = PrefabUtility.LoadPrefabContents(assetPath);
+                ConfigureCubePrefab(prefabRoot, material, scale, keepCollider, addCargoViewComponent);
+                prefab = PrefabUtility.SaveAsPrefabAsset(prefabRoot, assetPath);
+                PrefabUtility.UnloadPrefabContents(prefabRoot);
                 return prefab;
             }
 
             var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.name = System.IO.Path.GetFileNameWithoutExtension(assetPath);
-            cube.transform.localScale = scale;
-            ApplyMaterial(cube, material);
-            Object.DestroyImmediate(cube.GetComponent<Collider>());
+            ConfigureCubePrefab(cube, material, scale, keepCollider, addCargoViewComponent);
 
             prefab = PrefabUtility.SaveAsPrefabAsset(cube, assetPath);
             Object.DestroyImmediate(cube);
             return prefab;
+        }
+
+        private static void ConfigureCubePrefab(
+            GameObject cube,
+            Material material,
+            Vector3 scale,
+            bool keepCollider,
+            bool addCargoViewComponent)
+        {
+            cube.transform.localScale = scale;
+            ApplyMaterial(cube, material);
+
+            var collider = cube.GetComponent<Collider>();
+            if (keepCollider)
+            {
+                if (collider == null)
+                {
+                    cube.AddComponent<BoxCollider>();
+                }
+            }
+            else if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
+            }
+
+            if (addCargoViewComponent)
+            {
+                if (cube.GetComponent<LoadingDockCargoView>() == null)
+                {
+                    cube.AddComponent<LoadingDockCargoView>();
+                }
+            }
+            else
+            {
+                var cargoView = cube.GetComponent<LoadingDockCargoView>();
+                if (cargoView != null)
+                {
+                    Object.DestroyImmediate(cargoView);
+                }
+            }
         }
 
         private static void ApplyMaterial(GameObject target, Material material)

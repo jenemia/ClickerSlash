@@ -33,6 +33,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
+            var isMovementLocked = PrototypeSessionRuntime.IsLaneMovementLocked();
             var deltaTime = SystemAPI.Time.DeltaTime;
             var playerConfig = SystemAPI.GetSingleton<PlayerConfig>();
             var battleConfig = SystemAPI.GetSingleton<BattleConfig>();
@@ -43,6 +44,17 @@ namespace ClikerSlash.Battle
                          .Query<RefRW<LaneIndex>, RefRW<LaneMoveState>, RefRW<LocalTransform>>()
                          .WithAll<PlayerTag>())
             {
+                if (isMovementLocked)
+                {
+                    var currentLaneX = BattleLaneUtility.GetLaneX(laneXs, laneIndex.ValueRO.Value);
+                    moveState.ValueRW.StartLane = laneIndex.ValueRO.Value;
+                    moveState.ValueRW.TargetLane = laneIndex.ValueRO.Value;
+                    moveState.ValueRW.Progress = 0f;
+                    moveState.ValueRW.IsMoving = 0;
+                    transform.ValueRW.Position = new float3(currentLaneX, playerConfig.Y, playerConfig.Z);
+                    continue;
+                }
+
                 if (moveState.ValueRO.IsMoving == 0)
                 {
                     // 정지 프레임에도 기준 레인 위치에 다시 맞춰 두어 드리프트를 막습니다.
