@@ -12,7 +12,8 @@ namespace ClikerSlash.Battle
         [SerializeField] private LoadingDockEnvironmentAuthoring environment;
         [SerializeField] [Min(0.1f)] private float fallbackSlotSpacing = 1.9f;
 
-        private readonly Dictionary<int, GameObject> _cargoViews = new();
+        private readonly Dictionary<int, LoadingDockCargoView> _cargoViews = new();
+        private readonly LoadingDockCargoViewPool _cargoViewPool = new();
         private bool _wasLoadingDockActive;
         private Transform _cargoViewRoot;
 
@@ -89,45 +90,28 @@ namespace ClikerSlash.Battle
 
                 if (!_cargoViews.TryGetValue(entry.EntryId, out var cargoView) || cargoView == null)
                 {
-                    cargoView = CreateCargoView(entry);
+                    cargoView = _cargoViewPool.Acquire(
+                        entry.EntryId,
+                        entry.Kind,
+                        GetOrCreateCargoViewRoot(),
+                        ResolveSlotPosition(slotIndex));
                     _cargoViews[entry.EntryId] = cargoView;
                 }
 
+                cargoView.Bind(entry.EntryId, entry.Kind);
                 cargoView.transform.position = ResolveSlotPosition(slotIndex);
-                cargoView.transform.localScale = new Vector3(1.2f, 1.2f, 1.2f);
-                cargoView.name = $"LoadingDockCargo_{entry.EntryId}";
-
-                var renderer = cargoView.GetComponent<Renderer>();
-                if (renderer != null)
-                {
-                    renderer.material.color = ResolveCargoColor(entry.Kind);
-                }
+                cargoView.gameObject.name = $"LoadingDockCargo_{entry.EntryId}";
             }
 
             foreach (var staleEntryId in staleEntryIds)
             {
                 if (_cargoViews.TryGetValue(staleEntryId, out var cargoView) && cargoView != null)
                 {
-                    Destroy(cargoView);
+                    _cargoViewPool.Release(cargoView);
                 }
 
                 _cargoViews.Remove(staleEntryId);
             }
-        }
-
-        private GameObject CreateCargoView(LoadingDockCargoQueueEntry entry)
-        {
-            var cargoView = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cargoView.transform.SetParent(GetOrCreateCargoViewRoot(), false);
-            cargoView.name = $"LoadingDockCargo_{entry.EntryId}";
-
-            var renderer = cargoView.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.material.color = ResolveCargoColor(entry.Kind);
-            }
-
-            return cargoView;
         }
 
         private Vector3 ResolveSlotPosition(int slotIndex)
@@ -158,7 +142,7 @@ namespace ClikerSlash.Battle
             {
                 if (cargoView != null)
                 {
-                    Destroy(cargoView);
+                    _cargoViewPool.Release(cargoView);
                 }
             }
 
@@ -185,16 +169,6 @@ namespace ClikerSlash.Battle
                 LoadingDockCargoKind.Fragile => "깨지기 쉬운 물류",
                 LoadingDockCargoKind.Heavy => "무거운 물류",
                 _ => "표준 물류"
-            };
-        }
-
-        private static Color ResolveCargoColor(LoadingDockCargoKind kind)
-        {
-            return kind switch
-            {
-                LoadingDockCargoKind.Fragile => new Color(0.4f, 0.85f, 1f),
-                LoadingDockCargoKind.Heavy => new Color(0.72f, 0.72f, 0.72f),
-                _ => new Color(1f, 0.6f, 0.2f)
             };
         }
     }

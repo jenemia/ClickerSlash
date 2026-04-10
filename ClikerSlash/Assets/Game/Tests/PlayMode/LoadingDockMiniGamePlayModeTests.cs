@@ -1,6 +1,7 @@
 using System.Collections;
 using ClikerSlash.Battle;
 using NUnit.Framework;
+using UnityEngine;
 using UnityEngine.TestTools;
 
 namespace ClikerSlash.Tests.PlayMode
@@ -98,6 +99,34 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(result.DeliveredCargoCount, Is.EqualTo(3));
             Assert.That(result.TotalCargoCount, Is.EqualTo(3));
             Assert.That(result.CompletedSuccessfully, Is.True);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator CargoViewPoolReusesReleasedViewsByKind()
+        {
+            var root = new GameObject("CargoViewPoolRoot").transform;
+            var pool = new LoadingDockCargoViewPool();
+
+            var firstStandard = pool.Acquire(1, LoadingDockCargoKind.Standard, root, Vector3.zero);
+            var firstFragile = pool.Acquire(2, LoadingDockCargoKind.Fragile, root, Vector3.one);
+
+            pool.Release(firstStandard);
+            pool.Release(firstFragile);
+
+            var reusedStandard = pool.Acquire(3, LoadingDockCargoKind.Standard, root, Vector3.right);
+            var reusedFragile = pool.Acquire(4, LoadingDockCargoKind.Fragile, root, Vector3.left);
+
+            Assert.That(reusedStandard.gameObject, Is.SameAs(firstStandard.gameObject));
+            Assert.That(reusedFragile.gameObject, Is.SameAs(firstFragile.gameObject));
+            Assert.That(reusedStandard.EntryId, Is.EqualTo(3));
+            Assert.That(reusedFragile.EntryId, Is.EqualTo(4));
+            Assert.That(reusedStandard.Kind, Is.EqualTo(LoadingDockCargoKind.Standard));
+            Assert.That(reusedFragile.Kind, Is.EqualTo(LoadingDockCargoKind.Fragile));
+            Assert.That(reusedStandard.gameObject.activeSelf, Is.True);
+            Assert.That(reusedFragile.gameObject.activeSelf, Is.True);
+
+            Object.Destroy(root.gameObject);
             yield return null;
         }
     }
