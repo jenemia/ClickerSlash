@@ -58,8 +58,15 @@ namespace ClikerSlash.Editor
             var laneRoot = CreateLaneVisualRoot(battleView, laneMaterial, accentMaterial);
             var loadingDockEnvironment = CreateLoadingDockEnvironment(battleView, laneMaterial, accentMaterial, cargoMaterial, workerMaterial);
             CreateConfigRoots(battleView, laneRoot);
-            CreatePresentationRoot(workerPrefab, cargoVisualPrefabs, mainCamera, battleView, loadingDockEnvironment);
-            CreateHudRoot();
+            CreatePresentationRoot(
+                workerPrefab,
+                cargoVisualPrefabs,
+                mainCamera,
+                battleView,
+                loadingDockEnvironment,
+                out var laneVirtualCamera,
+                out var loadingDockVirtualCamera);
+            CreateHudRoot(mainCamera, laneVirtualCamera, loadingDockVirtualCamera);
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
             CreateHubScene();
@@ -330,20 +337,22 @@ namespace ClikerSlash.Editor
             CargoVisualPrefabSet cargoVisualPrefabs,
             Camera mainCamera,
             BattleViewAuthoring battleView,
-            LoadingDockEnvironmentAuthoring loadingDockEnvironment)
+            LoadingDockEnvironmentAuthoring loadingDockEnvironment,
+            out CinemachineCamera laneVirtualCamera,
+            out CinemachineCamera loadingDockVirtualCamera)
         {
             var presentationRoot = new GameObject("BattlePresentationRoot");
             var bridge = presentationRoot.AddComponent<BattlePresentationBridge>();
             var miniGamePresenter = presentationRoot.AddComponent<LoadingDockMiniGamePresenter>();
 
-            var laneVirtualCamera = CreateVirtualCamera(
+            laneVirtualCamera = CreateVirtualCamera(
                 "LaneVirtualCamera",
                 presentationRoot.transform,
                 battleView.CameraPosition,
                 Quaternion.Euler(battleView.CameraRotation),
                 battleView.CameraFieldOfView,
                 20);
-            var loadingDockVirtualCamera = CreateVirtualCamera(
+            loadingDockVirtualCamera = CreateVirtualCamera(
                 "LoadingDockVirtualCamera",
                 presentationRoot.transform,
                 LoadingDockVirtualCameraPosition,
@@ -382,7 +391,10 @@ namespace ClikerSlash.Editor
             return virtualCamera;
         }
 
-        private static void CreateHudRoot()
+        private static void CreateHudRoot(
+            Camera mainCamera,
+            CinemachineCamera laneVirtualCamera,
+            CinemachineCamera loadingDockVirtualCamera)
         {
             var hudRoot = new GameObject("HUDRoot");
             var canvas = hudRoot.AddComponent<Canvas>();
@@ -395,11 +407,24 @@ namespace ClikerSlash.Editor
             scaler.matchWidthOrHeight = 0.5f;
 
             var presenter = hudRoot.AddComponent<BattleHudPresenter>();
+            var previewPresenter = hudRoot.AddComponent<BattleAreaPreviewPresenter>();
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf") ??
                        Resources.GetBuiltinResource<Font>("Arial.ttf");
 
+            var previewLabel = CreateHudText("AreaPreviewLabel", hudRoot.transform, font, 22, TextAnchor.UpperLeft);
+            SetRect(previewLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -12f), new Vector2(260f, 28f));
+            previewLabel.text = "Other Area";
+
+            var previewFrame = CreateHudImage("AreaPreviewFrame", hudRoot.transform, new Color(0.08f, 0.10f, 0.14f, 0.95f));
+            SetRect(previewFrame.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -132f), new Vector2(332f, 192f));
+
+            var previewImage = CreateHudRawImage("AreaPreviewImage", previewFrame.transform, Color.white);
+            SetRect(previewImage.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(320f, 180f));
+            previewPresenter.BindSceneReferences(mainCamera, laneVirtualCamera, loadingDockVirtualCamera);
+            previewPresenter.BindPreviewImage(previewImage);
+
             var infoText = CreateHudText("InfoText", hudRoot.transform, font, 28, TextAnchor.UpperLeft);
-            SetRect(infoText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -26f), new Vector2(360f, 160f));
+            SetRect(infoText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -248f), new Vector2(360f, 160f));
             infoText.text = "Work 30.0s\nMoney 0\nCombo 0";
 
             var laneText = CreateHudText("LaneText", hudRoot.transform, font, 30, TextAnchor.UpperCenter);
@@ -418,6 +443,7 @@ namespace ClikerSlash.Editor
             resultText.gameObject.SetActive(false);
 
             presenter.Bind(infoText, laneText, resultText, controlsText);
+            EditorUtility.SetDirty(previewPresenter);
         }
 
         private static Text CreateHudText(string name, Transform parent, Font font, int fontSize, TextAnchor anchor)
@@ -432,6 +458,25 @@ namespace ClikerSlash.Editor
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             return text;
+        }
+
+        private static Image CreateHudImage(string name, Transform parent, Color color)
+        {
+            var imageObject = new GameObject(name);
+            imageObject.transform.SetParent(parent, false);
+            var image = imageObject.AddComponent<Image>();
+            image.color = color;
+            return image;
+        }
+
+        private static RawImage CreateHudRawImage(string name, Transform parent, Color color)
+        {
+            var imageObject = new GameObject(name);
+            imageObject.transform.SetParent(parent, false);
+            var rawImage = imageObject.AddComponent<RawImage>();
+            rawImage.color = color;
+            rawImage.raycastTarget = false;
+            return rawImage;
         }
 
         private static void SetRect(RectTransform rectTransform, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 sizeDelta)

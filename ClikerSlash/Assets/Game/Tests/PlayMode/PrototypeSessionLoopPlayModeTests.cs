@@ -6,8 +6,10 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using UnityEngine.UI;
 
 namespace ClikerSlash.Tests.PlayMode
 {
@@ -622,6 +624,175 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
+        /// 좌상단 preview 카메라는 메인 화면과 반대 작업 구역의 가상 카메라를 따라가야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BattleAreaPreviewTracksOppositeVirtualCameraAcrossTransitions()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+
+            var cameraObject = new GameObject("LoadingDockCamera", typeof(Camera), typeof(CinemachineBrain));
+            var camera = cameraObject.GetComponent<Camera>();
+            camera.transform.SetPositionAndRotation(new Vector3(0f, 10.6f, -16.8f), Quaternion.Euler(31f, 0f, 0f));
+            var brain = cameraObject.GetComponent<CinemachineBrain>();
+            brain.DefaultBlend = new CinemachineBlendDefinition(
+                CinemachineBlendDefinition.Styles.EaseInOut,
+                PrototypeSessionRuntime.DefaultLoadingDockTransitionDurationSeconds);
+
+            var battleViewObject = new GameObject("BattleView");
+            var battleView = battleViewObject.AddComponent<BattleViewAuthoring>();
+            battleView.CameraPosition = camera.transform.position;
+            battleView.CameraRotation = new Vector3(31f, 0f, 0f);
+            battleView.CameraFieldOfView = 34f;
+
+            var loadingDockEnvironmentObject = new GameObject("LoadingDockEnvironment");
+            var loadingDockEnvironment = loadingDockEnvironmentObject.AddComponent<LoadingDockEnvironmentAuthoring>();
+            loadingDockEnvironment.cargoBayRoot = new GameObject("CargoBayRoot").transform;
+            loadingDockEnvironment.cargoBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
+            loadingDockEnvironment.truckBayRoot = new GameObject("TruckBayRoot").transform;
+            loadingDockEnvironment.truckBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
+
+            var laneVirtualCamera = CreatePassiveVirtualCamera(
+                "LaneVirtualCamera",
+                battleView.CameraPosition,
+                Quaternion.Euler(battleView.CameraRotation),
+                battleView.CameraFieldOfView,
+                20);
+            var loadingDockVirtualCamera = CreatePassiveVirtualCamera(
+                "LoadingDockVirtualCamera",
+                new Vector3(13.64f, 11.22f, -9.6f),
+                Quaternion.Euler(39.583f, 18f, 0f),
+                battleView.CameraFieldOfView,
+                10);
+
+            var bridgeObject = new GameObject("BattlePresentationRoot", typeof(BattlePresentationBridge));
+            var bridge = bridgeObject.GetComponent<BattlePresentationBridge>();
+            bridge.BindSceneReferences(camera, battleView, loadingDockEnvironment, laneVirtualCamera, loadingDockVirtualCamera);
+
+            var previewImageObject = new GameObject("AreaPreviewImage", typeof(RectTransform), typeof(RawImage));
+            var previewImage = previewImageObject.GetComponent<RawImage>();
+            var previewPresenterObject = new GameObject("BattleAreaPreviewRoot", typeof(BattleAreaPreviewPresenter));
+            var previewPresenter = previewPresenterObject.GetComponent<BattleAreaPreviewPresenter>();
+            previewPresenter.BindSceneReferences(camera, laneVirtualCamera, loadingDockVirtualCamera);
+            previewPresenter.BindPreviewImage(previewImage);
+
+            yield return null;
+
+            Assert.That(previewPresenter.PreviewCamera, Is.Not.Null);
+            if (SupportsRenderTexturePreview())
+            {
+                Assert.That(previewPresenter.PreviewTexture, Is.Not.Null);
+                Assert.That(previewImage.texture, Is.SameAs(previewPresenter.PreviewTexture));
+            }
+            else
+            {
+                Assert.That(previewPresenter.PreviewTexture, Is.Null);
+                Assert.That(previewImage.texture, Is.Null);
+            }
+            yield return WaitForCameraPose(
+                previewPresenter.PreviewCamera,
+                loadingDockVirtualCamera.transform.position,
+                loadingDockVirtualCamera.transform.rotation,
+                60,
+                1.5f,
+                2.5f);
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 60);
+            yield return WaitForCameraPose(
+                camera,
+                loadingDockVirtualCamera.transform.position,
+                loadingDockVirtualCamera.transform.rotation,
+                60,
+                1.5f,
+                2.5f);
+            yield return WaitForCameraPose(
+                previewPresenter.PreviewCamera,
+                laneVirtualCamera.transform.position,
+                laneVirtualCamera.transform.rotation,
+                60,
+                1.5f,
+                2.5f);
+            Assert.That(brain.ActiveVirtualCamera, Is.SameAs(loadingDockVirtualCamera));
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.Lane, WorkAreaTransitionPhase.None, 60);
+            yield return WaitForCameraPose(
+                camera,
+                laneVirtualCamera.transform.position,
+                laneVirtualCamera.transform.rotation,
+                60,
+                1.5f,
+                2.5f);
+            yield return WaitForCameraPose(
+                previewPresenter.PreviewCamera,
+                loadingDockVirtualCamera.transform.position,
+                loadingDockVirtualCamera.transform.rotation,
+                60,
+                1.5f,
+                2.5f);
+            Assert.That(brain.ActiveVirtualCamera, Is.SameAs(laneVirtualCamera));
+
+            Object.Destroy(cameraObject);
+            Object.Destroy(battleViewObject);
+            Object.Destroy(loadingDockEnvironmentObject);
+            Object.Destroy(laneVirtualCamera.gameObject);
+            Object.Destroy(loadingDockVirtualCamera.gameObject);
+            Object.Destroy(bridgeObject);
+            Object.Destroy(previewImageObject);
+            Object.Destroy(previewPresenterObject);
+        }
+
+        /// <summary>
+        /// preview presenter는 비활성화될 때 런타임 텍스처와 UI 연결을 함께 정리해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BattleAreaPreviewReleasesRuntimeTextureOnDisable()
+        {
+            var cameraObject = new GameObject("PreviewSceneCamera", typeof(Camera));
+            var sceneCamera = cameraObject.GetComponent<Camera>();
+            var laneVirtualCamera = CreatePassiveVirtualCamera(
+                "LaneVirtualCamera",
+                Vector3.zero,
+                Quaternion.identity,
+                34f,
+                20);
+            var loadingDockVirtualCamera = CreatePassiveVirtualCamera(
+                "LoadingDockVirtualCamera",
+                new Vector3(5f, 6f, -3f),
+                Quaternion.Euler(22f, 15f, 0f),
+                34f,
+                10);
+            var previewImageObject = new GameObject("AreaPreviewImage", typeof(RectTransform), typeof(RawImage));
+            var previewImage = previewImageObject.GetComponent<RawImage>();
+            var previewPresenterObject = new GameObject("BattleAreaPreviewRoot", typeof(BattleAreaPreviewPresenter));
+            var previewPresenter = previewPresenterObject.GetComponent<BattleAreaPreviewPresenter>();
+            previewPresenter.BindSceneReferences(sceneCamera, laneVirtualCamera, loadingDockVirtualCamera);
+            previewPresenter.BindPreviewImage(previewImage);
+
+            yield return null;
+
+            var previewTexture = previewPresenter.PreviewTexture;
+            if (SupportsRenderTexturePreview())
+            {
+                Assert.That(previewTexture, Is.Not.Null);
+            }
+
+            previewPresenterObject.SetActive(false);
+            yield return null;
+
+            Assert.That(previewImage.texture, Is.Null);
+            Assert.That(previewTexture == null || !previewTexture.IsCreated(), Is.True);
+
+            Object.Destroy(cameraObject);
+            Object.Destroy(laneVirtualCamera.gameObject);
+            Object.Destroy(loadingDockVirtualCamera.gameObject);
+            Object.Destroy(previewImageObject);
+            Object.Destroy(previewPresenterObject);
+        }
+
+        /// <summary>
         /// 같은 kind의 물류는 레인과 상하차 구역에서 같은 프리팹 외형을 공유해야 합니다.
         /// </summary>
         [UnityTest]
@@ -739,6 +910,44 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
             yield return WaitForDockPhase(catalog, WorkAreaType.Lane, WorkAreaTransitionPhase.None, 120);
+        }
+
+        /// <summary>
+        /// 실제 전투 씬은 좌상단 반대 구역 preview 모니터와 런타임 텍스처를 함께 준비해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BattleSceneCreatesOtherAreaPreviewMonitor()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+            yield return null;
+
+            var previewPresenter = Object.FindFirstObjectByType<BattleAreaPreviewPresenter>();
+            var previewImage = FindRawImage("AreaPreviewImage");
+            var loadingDockCamera = FindVirtualCameraByName("LoadingDockVirtualCamera");
+
+            Assert.That(previewPresenter, Is.Not.Null);
+            Assert.That(previewImage, Is.Not.Null);
+            Assert.That(loadingDockCamera, Is.Not.Null);
+            Assert.That(previewPresenter.PreviewCamera, Is.Not.Null);
+            if (SupportsRenderTexturePreview())
+            {
+                Assert.That(previewPresenter.PreviewTexture, Is.Not.Null);
+                Assert.That(previewImage.texture, Is.SameAs(previewPresenter.PreviewTexture));
+            }
+            else
+            {
+                Assert.That(previewPresenter.PreviewTexture, Is.Null);
+                Assert.That(previewImage.texture, Is.Null);
+            }
+
+            yield return WaitForCameraPose(
+                previewPresenter.PreviewCamera,
+                loadingDockCamera.transform.position,
+                loadingDockCamera.transform.rotation,
+                120,
+                1.5f,
+                2.5f);
         }
 
         /// <summary>
@@ -1099,8 +1308,17 @@ namespace ClikerSlash.Tests.PlayMode
                 yield return null;
             }
 
-            Assert.That(Vector3.Distance(camera.transform.position, expectedPosition), Is.LessThanOrEqualTo(positionTolerance));
-            Assert.That(Quaternion.Angle(camera.transform.rotation, expectedRotation), Is.LessThanOrEqualTo(rotationTolerance));
+            var actualPosition = camera.transform.position;
+            var actualRotation = camera.transform.rotation.eulerAngles;
+            var targetRotation = expectedRotation.eulerAngles;
+            Assert.That(
+                Vector3.Distance(actualPosition, expectedPosition),
+                Is.LessThanOrEqualTo(positionTolerance),
+                $"Actual position: {actualPosition}, expected position: {expectedPosition}");
+            Assert.That(
+                Quaternion.Angle(camera.transform.rotation, expectedRotation),
+                Is.LessThanOrEqualTo(rotationTolerance),
+                $"Actual rotation: {actualRotation}, expected rotation: {targetRotation}");
         }
 
         private static CinemachineCamera CreatePassiveVirtualCamera(
@@ -1118,6 +1336,41 @@ namespace ClikerSlash.Tests.PlayMode
             virtualCamera.Lens = lens;
             virtualCamera.Priority = priority;
             return virtualCamera;
+        }
+
+        private static CinemachineCamera FindVirtualCameraByName(string cameraName)
+        {
+            var virtualCameras = Object.FindObjectsByType<CinemachineCamera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            foreach (var virtualCamera in virtualCameras)
+            {
+                if (virtualCamera != null &&
+                    string.Equals(virtualCamera.name, cameraName, System.StringComparison.Ordinal))
+                {
+                    return virtualCamera;
+                }
+            }
+
+            return null;
+        }
+
+        private static RawImage FindRawImage(string objectName)
+        {
+            var rawImages = Object.FindObjectsByType<RawImage>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            foreach (var rawImage in rawImages)
+            {
+                if (rawImage != null &&
+                    string.Equals(rawImage.name, objectName, System.StringComparison.Ordinal))
+                {
+                    return rawImage;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool SupportsRenderTexturePreview()
+        {
+            return SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
         }
 
         private static bool IsInsideViewport(Vector3 viewportPoint)
