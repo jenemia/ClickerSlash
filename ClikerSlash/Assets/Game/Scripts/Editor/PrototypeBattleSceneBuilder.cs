@@ -221,6 +221,23 @@ namespace ClikerSlash.Editor
             cargoThrowOrigin.transform.localPosition = new Vector3(2.4f, 1f, 2.2f);
             authoring.cargoThrowOrigin = cargoThrowOrigin.transform;
 
+            authoring.cargoSlotAnchors = new Transform[PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount];
+            var slotOffsets = new[]
+            {
+                new Vector3(-2.1f, 1.05f, -1.5f),
+                new Vector3(0f, 1.05f, -1.5f),
+                new Vector3(2.1f, 1.05f, -1.5f),
+                new Vector3(-1.05f, 1.05f, 1.25f),
+                new Vector3(1.05f, 1.05f, 1.25f)
+            };
+            for (var slotIndex = 0; slotIndex < authoring.cargoSlotAnchors.Length; slotIndex += 1)
+            {
+                var slotAnchor = new GameObject($"CargoSlotAnchor_{slotIndex + 1}");
+                slotAnchor.transform.SetParent(cargoBayRoot.transform, false);
+                slotAnchor.transform.localPosition = slotOffsets[slotIndex];
+                authoring.cargoSlotAnchors[slotIndex] = slotAnchor.transform;
+            }
+
             var truckBayRoot = new GameObject("TruckBayRoot");
             truckBayRoot.transform.SetParent(root.transform, false);
             truckBayRoot.transform.localPosition = new Vector3(5f, 0f, 1.8f);
@@ -260,6 +277,7 @@ namespace ClikerSlash.Editor
             cameraAnchor.transform.localPosition = new Vector3(-1.2f, 12.2f, -14.5f);
             cameraAnchor.transform.localRotation = Quaternion.Euler(36f, 18f, 0f);
             authoring.cameraAnchor = cameraAnchor.transform;
+            EditorUtility.SetDirty(authoring);
             return authoring;
         }
 

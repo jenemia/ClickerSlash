@@ -515,6 +515,12 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockEnvironment.cargoThrowOrigin, Is.Not.Null);
             Assert.That(loadingDockEnvironment.truckDropZone, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cameraAnchor, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.cargoSlotAnchors, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.cargoSlotAnchors.Length, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
+            foreach (var slotAnchor in loadingDockEnvironment.cargoSlotAnchors)
+            {
+                Assert.That(slotAnchor, Is.Not.Null);
+            }
             Assert.That(
                 Vector3.Distance(
                     loadingDockEnvironment.cargoBayRoot.position,
@@ -568,6 +574,42 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
             yield return WaitForDockPhase(catalog, WorkAreaType.Lane, WorkAreaTransitionPhase.None, 120);
+        }
+
+        /// <summary>
+        /// 상하차 presenter는 세션 큐를 기준으로 최대 5개의 슬롯만 표시해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockPresenterShowsOnlyActiveQueueSlots()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+            yield return null;
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            var environment = Object.FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            Assert.That(presenter, Is.Not.Null);
+            Assert.That(environment, Is.Not.Null);
+            var cargoViewRoot = presenter.transform.Find("LoadingDockCargoViewRoot");
+            Assert.That(cargoViewRoot, Is.Not.Null);
+            Assert.That(cargoViewRoot.childCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
+
+            var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+            Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
+            Assert.That(snapshot.BacklogCount, Is.EqualTo(2));
         }
 
         private static IEnumerator LoadSceneAndWait(string sceneName)

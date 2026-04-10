@@ -85,10 +85,10 @@ namespace ClikerSlash.Battle
             loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
                 MetaProgressionCatalogAsset.LoadDefaultCatalog(),
                 activeLaneCount);
+            var loadingDockQueue = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
 
-            infoText.text = PrototypeSessionRuntime.HasLastLoadingDockResult
-                ? $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}\nDock {PrototypeSessionRuntime.LastLoadingDockResult.DeliveredCargoCount}/{PrototypeSessionRuntime.LastLoadingDockResult.TotalCargoCount}"
-                : $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}";
+            infoText.text =
+                $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}\nDock {loadingDockQueue.ActiveSlotCount}/{loadingDockQueue.MaxActiveSlotCount} + {loadingDockQueue.BacklogCount}";
             laneText.text =
                 $"Lane {lane.Value + 1} / {activeLaneCount}\nMax Weight {maxHandleWeight.Value}";
             if (controlsText != null)
