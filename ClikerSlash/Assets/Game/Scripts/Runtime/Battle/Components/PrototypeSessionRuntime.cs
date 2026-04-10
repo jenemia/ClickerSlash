@@ -179,6 +179,41 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
+        /// 활성 슬롯에 표시된 상하차 물류를 delivered 처리하고 backlog를 즉시 보충합니다.
+        /// </summary>
+        public static bool TryDeliverLoadingDockCargo(int entryId, out LoadingDockCargoQueueEntry deliveredEntry)
+        {
+            deliveredEntry = default;
+            for (var index = 0; index < _loadingDockActiveSlots.Count; index += 1)
+            {
+                var activeEntry = _loadingDockActiveSlots[index];
+                if (activeEntry.EntryId != entryId)
+                {
+                    continue;
+                }
+
+                deliveredEntry = activeEntry;
+                _loadingDockActiveSlots.RemoveAt(index);
+                if (_loadingDockBacklogQueue.Count > 0)
+                {
+                    var nextEntry = _loadingDockBacklogQueue.Dequeue();
+                    if (index <= _loadingDockActiveSlots.Count)
+                    {
+                        _loadingDockActiveSlots.Insert(index, nextEntry);
+                    }
+                    else
+                    {
+                        _loadingDockActiveSlots.Add(nextEntry);
+                    }
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// 상하차 세션 큐와 슬롯 상태를 모두 비웁니다.
         /// </summary>
         public static void ClearLoadingDockQueue()

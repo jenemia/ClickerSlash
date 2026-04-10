@@ -612,6 +612,74 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(snapshot.BacklogCount, Is.EqualTo(2));
         }
 
+        /// <summary>
+        /// delivered 처리 시 활성 슬롯은 즉시 보충되고 backlog는 FIFO로 감소해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockQueueRefillsSlotAfterDelivery()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            Assert.That(PrototypeSessionRuntime.TryDeliverLoadingDockCargo(activeEntries[2].EntryId, out var deliveredEntry), Is.True);
+            Assert.That(deliveredEntry.EntryId, Is.EqualTo(3));
+
+            var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+            activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+
+            Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
+            Assert.That(snapshot.BacklogCount, Is.EqualTo(1));
+            Assert.That(activeEntries[2].EntryId, Is.EqualTo(6));
+            yield return null;
+        }
+
+        /// <summary>
+        /// presenter delivery 훅은 슬롯 cube를 release하고 다음 backlog 물류로 즉시 채워야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockPresenterDeliveryRefillsVisibleSlot()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            Assert.That(presenter, Is.Not.Null);
+
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            Assert.That(presenter.TryDeliverCargoEntry(activeEntries[0].EntryId), Is.True);
+            yield return null;
+
+            var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+            var cargoViewRoot = presenter.transform.Find("LoadingDockCargoViewRoot");
+            activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+
+            Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
+            Assert.That(snapshot.BacklogCount, Is.Zero);
+            Assert.That(activeEntries[0].EntryId, Is.EqualTo(6));
+            Assert.That(cargoViewRoot, Is.Not.Null);
+            Assert.That(cargoViewRoot.childCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
+        }
+
         private static IEnumerator LoadSceneAndWait(string sceneName)
         {
             SceneManager.LoadScene(sceneName);

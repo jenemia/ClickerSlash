@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace ClikerSlash.Battle
 {
@@ -44,6 +45,7 @@ namespace ClikerSlash.Battle
             }
 
             _wasLoadingDockActive = true;
+            HandlePointerInput();
             SyncVisibleCargoViews();
         }
 
@@ -114,6 +116,32 @@ namespace ClikerSlash.Battle
             }
         }
 
+        public bool TryDeliverCargoEntry(int entryId)
+        {
+            return PrototypeSessionRuntime.TryDeliverLoadingDockCargo(entryId, out _);
+        }
+
+        private void HandlePointerInput()
+        {
+            if (PrototypeSessionRuntime.IsPauseMenuOpen)
+            {
+                return;
+            }
+
+            var mouse = Mouse.current;
+            if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+            {
+                return;
+            }
+
+            if (!TryRaycastCargoEntry(out var entryId))
+            {
+                return;
+            }
+
+            TryDeliverCargoEntry(entryId);
+        }
+
         private Vector3 ResolveSlotPosition(int slotIndex)
         {
             if (environment.cargoSlotAnchors != null &&
@@ -160,6 +188,30 @@ namespace ClikerSlash.Battle
             rootObject.transform.SetParent(transform, false);
             _cargoViewRoot = rootObject.transform;
             return _cargoViewRoot;
+        }
+
+        private bool TryRaycastCargoEntry(out int entryId)
+        {
+            entryId = default;
+            if (sceneCamera == null || Mouse.current == null)
+            {
+                return false;
+            }
+
+            var ray = sceneCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+            if (!Physics.Raycast(ray, out var hit, 200f))
+            {
+                return false;
+            }
+
+            var cargoView = hit.collider.GetComponent<LoadingDockCargoView>();
+            if (cargoView == null)
+            {
+                return false;
+            }
+
+            entryId = cargoView.EntryId;
+            return true;
         }
 
         private static string DescribeCargoKind(LoadingDockCargoKind kind)
