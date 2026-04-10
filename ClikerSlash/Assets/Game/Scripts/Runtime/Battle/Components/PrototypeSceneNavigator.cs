@@ -13,6 +13,7 @@ namespace ClikerSlash.Battle
         public static void LoadHubScene()
         {
             PrototypeSessionRuntime.ClosePauseMenu();
+            PrototypeSessionRuntime.ClearLoadingDockQueue();
             SceneManager.LoadScene(PrototypeSessionRuntime.HubSceneName);
         }
 

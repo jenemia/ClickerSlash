@@ -41,6 +41,7 @@ namespace ClikerSlash.Battle
                 sessionStats.ValueRW.ProcessedCargoCount += 1;
                 sessionStats.ValueRW.CurrentCombo = nextCombo;
                 sessionStats.ValueRW.MaxCombo = nextMaxCombo;
+                PrototypeSessionRuntime.EnqueueLoadingDockCargo(handledEvent.ValueRO.Kind);
                 ecb.DestroyEntity(eventEntity);
             }
 

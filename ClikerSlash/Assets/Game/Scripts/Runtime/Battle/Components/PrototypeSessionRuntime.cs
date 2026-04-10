@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ClikerSlash.Battle
@@ -26,6 +27,7 @@ namespace ClikerSlash.Battle
         public const float DefaultBaseWorkDurationSeconds = 30f;
         public const float DefaultHealthDurationBonusSeconds = 10f;
         public const float DefaultLoadingDockTransitionDurationSeconds = 0.35f;
+        public const int MaxLoadingDockActiveSlotCount = 5;
 
         // 참이면 허브가 이전 작업에서 캡처한 결과 스냅샷을 표시해야 합니다.
         public static bool HasLastBattleResult { get; private set; }
@@ -41,6 +43,9 @@ namespace ClikerSlash.Battle
         private static bool _hasPendingLoadingDockEntryRequest;
         private static bool _hasPendingLoadingDockReturnRequest;
         private static float _loadingDockTransitionElapsed;
+        private static readonly Queue<LoadingDockCargoQueueEntry> _loadingDockBacklogQueue = new();
+        private static readonly List<LoadingDockCargoQueueEntry> _loadingDockActiveSlots = new();
+        private static int _nextLoadingDockCargoEntryId = 1;
 
         private static MetaProgressionRuntimeState _metaProgressionRuntimeState;
 
@@ -123,6 +128,68 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
+        /// 현재 상하차 큐의 backlog/활성 슬롯 요약을 반환합니다.
+        /// </summary>
+        public static LoadingDockQueueSnapshot GetLoadingDockQueueSnapshot()
+        {
+            return new LoadingDockQueueSnapshot
+            {
+                BacklogCount = _loadingDockBacklogQueue.Count,
+                ActiveSlotCount = _loadingDockActiveSlots.Count,
+                MaxActiveSlotCount = MaxLoadingDockActiveSlotCount,
+                TotalCount = _loadingDockActiveSlots.Count + _loadingDockBacklogQueue.Count
+            };
+        }
+
+        /// <summary>
+        /// 현재 활성 슬롯에 배치된 상하차 물류 엔트리 복사본을 반환합니다.
+        /// </summary>
+        public static LoadingDockCargoQueueEntry[] GetLoadingDockActiveCargoEntries()
+        {
+            return _loadingDockActiveSlots.ToArray();
+        }
+
+        /// <summary>
+        /// 현재 backlog 대기열에 쌓인 상하차 물류 엔트리 복사본을 반환합니다.
+        /// </summary>
+        public static LoadingDockCargoQueueEntry[] GetLoadingDockBacklogCargoEntries()
+        {
+            return _loadingDockBacklogQueue.ToArray();
+        }
+
+        /// <summary>
+        /// 레인에서 성공 처리된 물류를 상하차 세션 큐에 적재합니다.
+        /// </summary>
+        public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind)
+        {
+            var queueEntry = new LoadingDockCargoQueueEntry
+            {
+                EntryId = _nextLoadingDockCargoEntryId,
+                Kind = kind
+            };
+            _nextLoadingDockCargoEntryId += 1;
+
+            if (_loadingDockActiveSlots.Count < MaxLoadingDockActiveSlotCount)
+            {
+                _loadingDockActiveSlots.Add(queueEntry);
+                return;
+            }
+
+            _loadingDockBacklogQueue.Enqueue(queueEntry);
+        }
+
+        /// <summary>
+        /// 상하차 세션 큐와 슬롯 상태를 모두 비웁니다.
+        /// </summary>
+        public static void ClearLoadingDockQueue()
+        {
+            _loadingDockBacklogQueue.Clear();
+            _loadingDockActiveSlots.Clear();
+            _nextLoadingDockCargoEntryId = 1;
+            ClearLastLoadingDockResult();
+        }
+
+        /// <summary>
         /// 다음 씬이 저장 데이터 없이도 읽을 수 있도록 마지막 작업 결과를 저장합니다.
         /// </summary>
         public static void StoreBattleResult(BattleResultSnapshot snapshot)
@@ -176,8 +243,7 @@ namespace ClikerSlash.Battle
             ClosePauseMenu();
             HasLastBattleResult = false;
             LastBattleResult = default;
-            HasLastLoadingDockResult = false;
-            LastLoadingDockResult = default;
+            ClearLoadingDockQueue();
             ResolvedWorkDurationSeconds = 0f;
             HasPendingBattleEntryRequest = false;
             _currentWorkArea = WorkAreaType.Lane;
@@ -292,6 +358,7 @@ namespace ClikerSlash.Battle
         public static void RequestBattleEntry()
         {
             ClosePauseMenu();
+            ClearLoadingDockQueue();
             HasPendingBattleEntryRequest = true;
         }
 

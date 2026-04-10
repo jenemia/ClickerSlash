@@ -326,6 +326,74 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
+        /// 상하차 세션 큐는 최대 5개 활성 슬롯을 먼저 채우고 초과분은 backlog에 FIFO로 쌓아야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockQueueSnapshotSeparatesActiveSlotsAndBacklog()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+
+            var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            var backlogEntries = PrototypeSessionRuntime.GetLoadingDockBacklogCargoEntries();
+
+            Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(5));
+            Assert.That(snapshot.BacklogCount, Is.EqualTo(2));
+            Assert.That(snapshot.TotalCount, Is.EqualTo(7));
+            Assert.That(snapshot.MaxActiveSlotCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
+            Assert.That(activeEntries.Length, Is.EqualTo(5));
+            Assert.That(backlogEntries.Length, Is.EqualTo(2));
+            Assert.That(activeEntries[0].EntryId, Is.EqualTo(1));
+            Assert.That(activeEntries[4].EntryId, Is.EqualTo(5));
+            Assert.That(backlogEntries[0].EntryId, Is.EqualTo(6));
+            Assert.That(backlogEntries[1].EntryId, Is.EqualTo(7));
+            yield return null;
+        }
+
+        /// <summary>
+        /// 레인 성공 처리 이벤트만 상하차 세션 큐에 적재되고 미스 이벤트는 제외되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator HandledCargoEventsEnqueueLoadingDockCargoKinds()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            FreezeRandomSpawns(entityManager);
+
+            var handledEvent = entityManager.CreateEntity();
+            entityManager.AddComponentData(handledEvent, new CargoHandledEvent
+            {
+                Reward = 25,
+                Kind = LoadingDockCargoKind.Fragile
+            });
+
+            var missedEvent = entityManager.CreateEntity();
+            entityManager.AddComponentData(missedEvent, new CargoMissedEvent { Penalty = 10 });
+
+            yield return null;
+            yield return null;
+
+            var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+
+            Assert.That(snapshot.TotalCount, Is.EqualTo(1));
+            Assert.That(snapshot.ActiveSlotCount, Is.EqualTo(1));
+            Assert.That(snapshot.BacklogCount, Is.Zero);
+            Assert.That(activeEntries.Length, Is.EqualTo(1));
+            Assert.That(activeEntries[0].Kind, Is.EqualTo(LoadingDockCargoKind.Fragile));
+        }
+
+        /// <summary>
         /// 허브로 전환할 때 일시정지 상태와 timeScale이 항상 정리되어야 합니다.
         /// </summary>
         [UnityTest]
@@ -334,6 +402,7 @@ namespace ClikerSlash.Tests.PlayMode
             PrototypeSessionRuntime.ResetPrototypeState();
             yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
 
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
             PrototypeSessionRuntime.OpenPauseMenu();
             Assert.That(PrototypeSessionRuntime.IsPauseMenuOpen, Is.True);
             Assert.That(Time.timeScale, Is.EqualTo(0f));
@@ -343,6 +412,7 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(PrototypeSessionRuntime.IsPauseMenuOpen, Is.False);
             Assert.That(Time.timeScale, Is.EqualTo(1f));
+            Assert.That(PrototypeSessionRuntime.GetLoadingDockQueueSnapshot().TotalCount, Is.Zero);
         }
 
         /// <summary>
@@ -539,6 +609,7 @@ namespace ClikerSlash.Tests.PlayMode
             entityManager.AddComponentData(cargoEntity, new CargoWeight { Value = weight });
             entityManager.AddComponentData(cargoEntity, new CargoReward { Value = reward });
             entityManager.AddComponentData(cargoEntity, new CargoPenalty { Value = penalty });
+            entityManager.AddComponentData(cargoEntity, new CargoKind { Value = LoadingDockCargoKind.Standard });
             entityManager.AddComponentData(cargoEntity, LocalTransform.FromPositionRotationScale(
                 new float3(laneX, cargoConfig.Y, zPosition),
                 quaternion.identity,

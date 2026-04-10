@@ -59,9 +59,11 @@ namespace ClikerSlash.Battle
             spawnTimer.ValueRW.Remaining += battleConfig.SpawnInterval;
             var laneIndex = spawnTimer.ValueRW.Random.NextInt(0, activeLaneCount);
             var laneX = BattleLaneUtility.GetLaneX(laneXs, laneIndex);
+            var cargoKind = (LoadingDockCargoKind)spawnTimer.ValueRW.Random.NextInt(0, 3);
 
             var cargoEntity = state.EntityManager.CreateEntity();
             state.EntityManager.AddComponentData(cargoEntity, new CargoTag());
+            state.EntityManager.AddComponentData(cargoEntity, new CargoKind { Value = cargoKind });
             state.EntityManager.AddComponentData(cargoEntity, new LaneIndex { Value = laneIndex });
             state.EntityManager.AddComponentData(cargoEntity, new VerticalPosition { Value = battleConfig.CargoSpawnZ });
             state.EntityManager.AddComponentData(cargoEntity, new MoveSpeed { Value = cargoConfig.MoveSpeed });

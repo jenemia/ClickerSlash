@@ -79,6 +79,14 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
+    /// 레인 물류가 상하차 큐에 전달할 기본 분류를 저장합니다.
+    /// </summary>
+    public struct CargoKind : IComponentData
+    {
+        public LoadingDockCargoKind Value;
+    }
+
+    /// <summary>
     /// 플레이어 또는 물류 엔티티의 현재 레인 인덱스를 저장합니다.
     /// </summary>
     public struct LaneIndex : IComponentData
@@ -222,6 +230,7 @@ namespace ClikerSlash.Battle
     public struct CargoHandledEvent : IComponentData
     {
         public int Reward;
+        public LoadingDockCargoKind Kind;
     }
 
     /// <summary>

@@ -59,8 +59,10 @@ namespace ClikerSlash.Battle
             var selectedWeight = 0;
             var bestDistance = float.MaxValue;
 
-            foreach (var (cargoLane, cargoWeight, cargoReward, cargoPenalty, cargoTransform, cargoEntity) in SystemAPI
-                         .Query<RefRO<LaneIndex>, RefRO<CargoWeight>, RefRO<CargoReward>, RefRO<CargoPenalty>, RefRO<LocalTransform>>()
+            var selectedKind = LoadingDockCargoKind.Standard;
+
+            foreach (var (cargoLane, cargoWeight, cargoReward, cargoPenalty, cargoKind, cargoTransform, cargoEntity) in SystemAPI
+                         .Query<RefRO<LaneIndex>, RefRO<CargoWeight>, RefRO<CargoReward>, RefRO<CargoPenalty>, RefRO<CargoKind>, RefRO<LocalTransform>>()
                          .WithAll<CargoTag>()
                          .WithEntityAccess())
             {
@@ -79,6 +81,7 @@ namespace ClikerSlash.Battle
                 selectedReward = cargoReward.ValueRO.Value;
                 selectedPenalty = cargoPenalty.ValueRO.Value;
                 selectedWeight = cargoWeight.ValueRO.Value;
+                selectedKind = cargoKind.ValueRO.Value;
                 bestDistance = distance;
             }
 
@@ -98,7 +101,11 @@ namespace ClikerSlash.Battle
             {
                 var handledEvent = ecb.CreateEntity();
                 var adjustedReward = math.max(0, (int)math.round(selectedReward * economyModifier.RewardMultiplier));
-                ecb.AddComponent(handledEvent, new CargoHandledEvent { Reward = adjustedReward });
+                ecb.AddComponent(handledEvent, new CargoHandledEvent
+                {
+                    Reward = adjustedReward,
+                    Kind = selectedKind
+                });
                 handleState.ValueRW.BusyUntilTime = now + battleConfig.HandleDurationSeconds;
             }
 
