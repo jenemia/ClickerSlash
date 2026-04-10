@@ -281,6 +281,11 @@ namespace ClikerSlash.Editor
             truckDropZone.transform.localPosition = new Vector3(-1.4f, 1.2f, 0.8f);
             authoring.truckDropZone = truckDropZone.transform;
 
+            var dockRobotAnchor = new GameObject("DockRobotAnchor");
+            dockRobotAnchor.transform.SetParent(root.transform, false);
+            dockRobotAnchor.transform.localPosition = new Vector3(3.2f, 1.05f, -0.8f);
+            authoring.dockRobotAnchor = dockRobotAnchor.transform;
+
             EditorUtility.SetDirty(authoring);
             return authoring;
         }
@@ -309,7 +314,9 @@ namespace ClikerSlash.Editor
 
             var cargoRoot = new GameObject("CargoPrototype");
             var cargoAuthoring = cargoRoot.AddComponent<CargoAuthoring>();
-            cargoAuthoring.Weight = 6;
+            cargoAuthoring.StandardWeight = 6;
+            cargoAuthoring.FragileWeight = 6;
+            cargoAuthoring.HeavyWeight = 12;
             cargoAuthoring.Reward = 60;
             cargoAuthoring.Penalty = 35;
             cargoAuthoring.Y = 0.6f;

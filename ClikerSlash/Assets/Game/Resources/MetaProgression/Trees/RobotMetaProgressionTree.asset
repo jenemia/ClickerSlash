@@ -18,12 +18,20 @@ MonoBehaviour:
   branches:
   - tabId: 2
     branchId: 5
-    displayName: "\uC790\uB3D9\uD654"
+    displayName: 자동화
     sortOrder: 5
+  - tabId: 2
+    branchId: 6
+    displayName: 파워
+    sortOrder: 6
+  - tabId: 2
+    branchId: 7
+    displayName: 세밀함
+    sortOrder: 7
   nodes:
   - nodeId: automation.weight_scanner
     branchId: 5
-    displayName: "\uC790\uB3D9 \uC2A4\uCE90\uB108"
+    displayName: 자동 스캐너
     tier: 1
     maxLevel: 1
     cost: 1
@@ -36,7 +44,7 @@ MonoBehaviour:
       targetKey: automation.weight_preview
   - nodeId: automation.return_belt
     branchId: 5
-    displayName: "\uB9AC\uD134 \uBCA8\uD2B8"
+    displayName: 리턴 벨트
     tier: 2
     maxLevel: 3
     cost: 2
@@ -50,7 +58,7 @@ MonoBehaviour:
       targetKey: 
   - nodeId: automation.assist_arm
     branchId: 5
-    displayName: "\uBCF4\uC870 \uC554 \uC124\uCE58"
+    displayName: 보조 암 설치
     tier: 3
     maxLevel: 1
     cost: 3
@@ -62,3 +70,57 @@ MonoBehaviour:
       intValue: 0
       floatValue: 0
       targetKey: automation.assist_arm
+  - nodeId: robot.lane_robot_unlock
+    branchId: 6
+    displayName: 레인 로봇 오픈
+    tier: 1
+    maxLevel: 1
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 11
+      operation: 3
+      intValue: 0
+      floatValue: 0
+      targetKey: robot.lane_access
+  - nodeId: robot.dock_robot_unlock
+    branchId: 6
+    displayName: Dock 로봇 오픈
+    tier: 1
+    maxLevel: 1
+    cost: 1
+    prerequisiteNodeIds: []
+    effects:
+    - effectType: 11
+      operation: 3
+      intValue: 0
+      floatValue: 0
+      targetKey: robot.dock_access
+  - nodeId: robot.power_frame_tuning
+    branchId: 6
+    displayName: 파워 프레임 튜닝
+    tier: 2
+    maxLevel: 5
+    cost: 2
+    prerequisiteNodeIds:
+    - robot.lane_robot_unlock
+    effects:
+    - effectType: 12
+      operation: 0
+      intValue: 2
+      floatValue: 2
+      targetKey: 
+  - nodeId: robot.precision_calibration
+    branchId: 7
+    displayName: 정밀 교정
+    tier: 1
+    maxLevel: 1
+    cost: 2
+    prerequisiteNodeIds:
+    - robot.dock_robot_unlock
+    effects:
+    - effectType: 13
+      operation: 0
+      intValue: 1
+      floatValue: 1
+      targetKey: 

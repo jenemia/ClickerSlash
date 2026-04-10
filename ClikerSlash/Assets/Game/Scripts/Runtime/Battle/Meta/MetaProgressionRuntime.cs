@@ -9,6 +9,7 @@ namespace ClikerSlash.Battle
     /// </summary>
     public struct ResolvedMetaProgression
     {
+        public const int BaseRobotMaxHandleWeight = 6;
         public int SchemaVersion;
         public int ResolvedLoadoutVersion;
         public int UnlockedNodeCount;
@@ -24,6 +25,10 @@ namespace ClikerSlash.Battle
         public bool HasWeightPreview;
         public bool HasAssistArm;
         public bool HasLoadingDockAccess;
+        public bool HasLaneRobotAccess;
+        public bool HasDockRobotAccess;
+        public int RobotMaxHandleWeight;
+        public int RobotPrecisionTier;
     }
 
     /// <summary>
@@ -123,7 +128,11 @@ namespace ClikerSlash.Battle
                 ReturnBeltChance = 0f,
                 HasWeightPreview = ContainsFlag(snapshot.selectedAutomationFlags, MetaProgressionCatalogAsset.WeightPreviewFlag),
                 HasAssistArm = ContainsFlag(snapshot.selectedAutomationFlags, MetaProgressionCatalogAsset.AssistArmFlag),
-                HasLoadingDockAccess = false
+                HasLoadingDockAccess = false,
+                HasLaneRobotAccess = false,
+                HasDockRobotAccess = false,
+                RobotMaxHandleWeight = ResolvedMetaProgression.BaseRobotMaxHandleWeight,
+                RobotPrecisionTier = 0
             };
 
             foreach (var unlockedState in snapshot.unlockedNodeStates)
@@ -158,6 +167,8 @@ namespace ClikerSlash.Battle
             resolved.RewardMultiplier = math.max(0.01f, resolved.RewardMultiplier);
             resolved.PenaltyMultiplier = math.max(0.01f, resolved.PenaltyMultiplier);
             resolved.ReturnBeltChance = math.clamp(resolved.ReturnBeltChance, 0f, 1f);
+            resolved.RobotMaxHandleWeight = math.max(1, resolved.RobotMaxHandleWeight);
+            resolved.RobotPrecisionTier = math.max(0, resolved.RobotPrecisionTier);
             return resolved;
         }
 
@@ -338,6 +349,25 @@ namespace ClikerSlash.Battle
                         {
                             resolved.HasLoadingDockAccess = true;
                         }
+                        break;
+
+                    case SkillEffectType.RobotUnlockFlag:
+                        if (string.Equals(effect.targetKey, MetaProgressionCatalogAsset.LaneRobotUnlockFlag, StringComparison.Ordinal))
+                        {
+                            resolved.HasLaneRobotAccess = true;
+                        }
+                        else if (string.Equals(effect.targetKey, MetaProgressionCatalogAsset.DockRobotUnlockFlag, StringComparison.Ordinal))
+                        {
+                            resolved.HasDockRobotAccess = true;
+                        }
+                        break;
+
+                    case SkillEffectType.RobotMaxHandleWeightAdd:
+                        resolved.RobotMaxHandleWeight += effect.intValue;
+                        break;
+
+                    case SkillEffectType.RobotPrecisionTierAdd:
+                        resolved.RobotPrecisionTier += effect.intValue;
                         break;
                 }
             }

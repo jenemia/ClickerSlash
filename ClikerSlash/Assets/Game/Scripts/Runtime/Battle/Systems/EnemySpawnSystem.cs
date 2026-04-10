@@ -60,6 +60,12 @@ namespace ClikerSlash.Battle
             var laneIndex = spawnTimer.ValueRW.Random.NextInt(0, activeLaneCount);
             var laneX = BattleLaneUtility.GetLaneX(laneXs, laneIndex);
             var cargoKind = (LoadingDockCargoKind)spawnTimer.ValueRW.Random.NextInt(0, 3);
+            var cargoWeight = cargoKind switch
+            {
+                LoadingDockCargoKind.Fragile => cargoConfig.FragileWeight,
+                LoadingDockCargoKind.Heavy => cargoConfig.HeavyWeight,
+                _ => cargoConfig.StandardWeight
+            };
 
             var cargoEntity = state.EntityManager.CreateEntity();
             state.EntityManager.AddComponentData(cargoEntity, new CargoTag());
@@ -67,7 +73,7 @@ namespace ClikerSlash.Battle
             state.EntityManager.AddComponentData(cargoEntity, new LaneIndex { Value = laneIndex });
             state.EntityManager.AddComponentData(cargoEntity, new VerticalPosition { Value = battleConfig.CargoSpawnZ });
             state.EntityManager.AddComponentData(cargoEntity, new MoveSpeed { Value = cargoConfig.MoveSpeed });
-            state.EntityManager.AddComponentData(cargoEntity, new CargoWeight { Value = cargoConfig.Weight });
+            state.EntityManager.AddComponentData(cargoEntity, new CargoWeight { Value = cargoWeight });
             state.EntityManager.AddComponentData(cargoEntity, new CargoReward { Value = cargoConfig.Reward });
             state.EntityManager.AddComponentData(cargoEntity, new CargoPenalty { Value = cargoConfig.Penalty });
             state.EntityManager.AddComponentData(cargoEntity, LocalTransform.FromPositionRotationScale(

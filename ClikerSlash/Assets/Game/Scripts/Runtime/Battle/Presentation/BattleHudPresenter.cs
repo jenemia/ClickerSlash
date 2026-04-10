@@ -1,5 +1,6 @@
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Transforms;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -56,6 +57,9 @@ namespace ClikerSlash.Battle
                 ComponentType.ReadOnly<ComboState>());
             using var laneQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<LaneLayout>());
             using var sessionRuleQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<SessionRuleState>());
+            using var laneRobotQuery = entityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<LaneRobotTag>(),
+                ComponentType.ReadOnly<LaneRobotState>());
 
             if (battleQuery.IsEmptyIgnoreFilter || playerQuery.IsEmptyIgnoreFilter || laneQuery.IsEmptyIgnoreFilter)
             {
@@ -73,6 +77,10 @@ namespace ClikerSlash.Battle
             var activeLaneCount = sessionRuleQuery.IsEmptyIgnoreFilter
                 ? laneLayout.LaneCount
                 : entityManager.GetComponentData<SessionRuleState>(sessionRuleQuery.GetSingletonEntity()).ActiveLaneCount;
+            var hasLaneRobot = !laneRobotQuery.IsEmptyIgnoreFilter;
+            var laneRobotState = hasLaneRobot
+                ? entityManager.GetComponentData<LaneRobotState>(laneRobotQuery.GetSingletonEntity())
+                : default;
             var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
                 MetaProgressionCatalogAsset.LoadDefaultCatalog(),
                 activeLaneCount);
@@ -81,6 +89,17 @@ namespace ClikerSlash.Battle
             if (!PrototypeSessionRuntime.IsPauseMenuOpen)
             {
                 HandleLoadingDockInput(loadingDockState, activeLaneCount, outcome);
+                HandleLaneRobotPlacementInput(
+                    entityManager,
+                    laneRobotQuery,
+                    laneRobotState,
+                    activeLaneCount,
+                    loadingDockState,
+                    outcome);
+                if (hasLaneRobot)
+                {
+                    laneRobotState = entityManager.GetComponentData<LaneRobotState>(laneRobotQuery.GetSingletonEntity());
+                }
             }
             loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
                 MetaProgressionCatalogAsset.LoadDefaultCatalog(),
@@ -90,10 +109,10 @@ namespace ClikerSlash.Battle
             infoText.text =
                 $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}\nDock {loadingDockQueue.ActiveSlotCount}/{loadingDockQueue.MaxActiveSlotCount} + {loadingDockQueue.BacklogCount}";
             laneText.text =
-                $"Lane {lane.Value + 1} / {activeLaneCount}\nMax Weight {maxHandleWeight.Value}";
+                $"Lane {lane.Value + 1} / {activeLaneCount}\nMax Weight {maxHandleWeight.Value}\nRobot {(hasLaneRobot ? DescribeLaneRobotState(laneRobotState) : "OFF")}";
             if (controlsText != null)
             {
-                controlsText.text = BuildControlsText(loadingDockState);
+                controlsText.text = BuildControlsText(loadingDockState, hasLaneRobot, laneRobotState, activeLaneCount);
             }
 
             if (outcome.HasOutcome == 0)
@@ -155,17 +174,89 @@ namespace ClikerSlash.Battle
             }
         }
 
-        private static string BuildControlsText(LoadingDockRuntimeState loadingDockState)
+        private static void HandleLaneRobotPlacementInput(
+            EntityManager entityManager,
+            EntityQuery laneRobotQuery,
+            LaneRobotState laneRobotState,
+            int activeLaneCount,
+            LoadingDockRuntimeState loadingDockState,
+            BattleOutcomeState outcome)
+        {
+            if (laneRobotQuery.IsEmptyIgnoreFilter ||
+                laneRobotState.IsAssigned != 0 ||
+                loadingDockState.CurrentArea != WorkAreaType.Lane ||
+                loadingDockState.TransitionPhase != WorkAreaTransitionPhase.None ||
+                outcome.HasOutcome != 0 ||
+                PrototypeSessionRuntime.IsPauseMenuOpen)
+            {
+                return;
+            }
+
+            var keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return;
+            }
+
+            var requestedLane = ResolveRequestedLaneIndex(keyboard);
+            if (requestedLane < 0 || requestedLane >= activeLaneCount)
+            {
+                return;
+            }
+
+            var laneRobotEntity = laneRobotQuery.GetSingletonEntity();
+            laneRobotState.AssignedLane = requestedLane;
+            laneRobotState.IsAssigned = 1;
+            entityManager.SetComponentData(laneRobotEntity, laneRobotState);
+
+            using var laneQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<LaneLayout>());
+            if (laneQuery.IsEmptyIgnoreFilter)
+            {
+                return;
+            }
+
+            var laneEntity = laneQuery.GetSingletonEntity();
+            var laneXs = entityManager.GetBuffer<LaneWorldXElement>(laneEntity);
+            var robotTransform = entityManager.GetComponentData<LocalTransform>(laneRobotEntity);
+            robotTransform.Position.x = BattleLaneUtility.GetLaneX(laneXs, requestedLane);
+            entityManager.SetComponentData(laneRobotEntity, robotTransform);
+        }
+
+        private static int ResolveRequestedLaneIndex(Keyboard keyboard)
+        {
+            if (keyboard.digit1Key.wasPressedThisFrame) return 0;
+            if (keyboard.digit2Key.wasPressedThisFrame) return 1;
+            if (keyboard.digit3Key.wasPressedThisFrame) return 2;
+            if (keyboard.digit4Key.wasPressedThisFrame) return 3;
+            if (keyboard.digit5Key.wasPressedThisFrame) return 4;
+            return -1;
+        }
+
+        private static string BuildControlsText(
+            LoadingDockRuntimeState loadingDockState,
+            bool hasLaneRobot,
+            LaneRobotState laneRobotState,
+            int activeLaneCount)
         {
             var movementControls = "Controls: A / D or Left / Right";
+            var robotControls = hasLaneRobot && laneRobotState.IsAssigned == 0
+                ? $" / 1-{Mathf.Min(5, activeLaneCount)}: Place Robot"
+                : string.Empty;
             if (!loadingDockState.HasLoadingDockAccess)
             {
-                return $"{movementControls} / Esc: Pause";
+                return $"{movementControls}{robotControls} / Esc: Pause";
             }
 
             return loadingDockState.CurrentArea == WorkAreaType.LoadingDock
                 ? $"{movementControls} / Q: Return To Lane / Esc: Pause"
-                : $"{movementControls} / Q: Loading Dock / Esc: Pause";
+                : $"{movementControls}{robotControls} / Q: Loading Dock / Esc: Pause";
+        }
+
+        private static string DescribeLaneRobotState(LaneRobotState laneRobotState)
+        {
+            return laneRobotState.IsAssigned == 0
+                ? "UNSET"
+                : $"Lane {laneRobotState.AssignedLane + 1}";
         }
 
         private void OnGUI()

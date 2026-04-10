@@ -93,6 +93,13 @@ namespace ClikerSlash.Battle
                 HasWeightPreview = resolvedProgression.HasWeightPreview ? (byte)1 : (byte)0,
                 HasAssistArm = resolvedProgression.HasAssistArm ? (byte)1 : (byte)0
             });
+            state.EntityManager.AddComponentData(configEntity, new RobotProfile
+            {
+                HasLaneRobotAccess = resolvedProgression.HasLaneRobotAccess ? (byte)1 : (byte)0,
+                HasDockRobotAccess = resolvedProgression.HasDockRobotAccess ? (byte)1 : (byte)0,
+                MaxHandleWeight = resolvedProgression.RobotMaxHandleWeight,
+                PrecisionTier = resolvedProgression.RobotPrecisionTier
+            });
             state.EntityManager.AddComponentData(configEntity, new SkillLoadoutState
             {
                 SchemaVersion = resolvedProgression.SchemaVersion,
@@ -119,6 +126,22 @@ namespace ClikerSlash.Battle
                 quaternion.identity,
                 1f));
             state.EntityManager.AddBuffer<LaneMoveCommandBufferElement>(playerEntity);
+
+            if (resolvedProgression.HasLaneRobotAccess)
+            {
+                var laneRobotEntity = state.EntityManager.CreateEntity();
+                state.EntityManager.AddComponentData(laneRobotEntity, new LaneRobotTag());
+                state.EntityManager.AddComponentData(laneRobotEntity, new LaneRobotState
+                {
+                    AssignedLane = 0,
+                    IsAssigned = 0
+                });
+                state.EntityManager.AddComponentData(laneRobotEntity, new HandleState { BusyUntilTime = 0d });
+                state.EntityManager.AddComponentData(laneRobotEntity, LocalTransform.FromPositionRotationScale(
+                    new float3(0f, playerConfig.Y, (battleConfig.JudgmentLineZ + battleConfig.FailLineZ) * 0.5f),
+                    quaternion.identity,
+                    0.95f));
+            }
         }
     }
 }

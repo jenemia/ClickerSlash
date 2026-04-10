@@ -49,6 +49,7 @@ namespace ClikerSlash.Battle
     {
         public int EntryId;
         public LoadingDockCargoKind Kind;
+        public int Weight;
     }
 
     /// <summary>
@@ -59,6 +60,7 @@ namespace ClikerSlash.Battle
         public int SlotIndex;
         public int EntryId;
         public LoadingDockCargoKind Kind;
+        public int Weight;
     }
 
     /// <summary>

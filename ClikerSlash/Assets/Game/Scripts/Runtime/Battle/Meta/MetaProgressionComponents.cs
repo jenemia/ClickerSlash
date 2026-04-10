@@ -44,6 +44,19 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
+    /// 로봇 해금 상태와 처리 한도를 전투 런타임에 전달하는 싱글턴입니다.
+    /// </summary>
+    public struct RobotProfile : IComponentData
+    {
+        // 0은 비활성, 1은 활성입니다.
+        public byte HasLaneRobotAccess;
+        // 0은 비활성, 1은 활성입니다.
+        public byte HasDockRobotAccess;
+        public int MaxHandleWeight;
+        public int PrecisionTier;
+    }
+
+    /// <summary>
     /// 현재 세션이 어떤 메타 로드아웃으로 시작했는지 요약한 싱글턴입니다.
     /// </summary>
     public struct SkillLoadoutState : IComponentData

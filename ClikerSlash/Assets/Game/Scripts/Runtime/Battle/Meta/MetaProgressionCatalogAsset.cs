@@ -6,7 +6,7 @@ using UnityEngine.Serialization;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 메타 성장의 6개 큰 줄기 식별자입니다.
+    /// 메타 성장의 주요 줄기 식별자입니다.
     /// </summary>
     public enum SkillBranchId
     {
@@ -15,7 +15,9 @@ namespace ClikerSlash.Battle
         Mobility = 2,
         Mastery = 3,
         Management = 4,
-        Automation = 5
+        Automation = 5,
+        RobotPower = 6,
+        RobotPrecision = 7
     }
 
     /// <summary>
@@ -43,7 +45,10 @@ namespace ClikerSlash.Battle
         PreviewCargoCountAdd = 7,
         ReturnBeltChanceAdd = 8,
         AutomationUnlockFlag = 9,
-        CenterUnlockFlag = 10
+        CenterUnlockFlag = 10,
+        RobotUnlockFlag = 11,
+        RobotMaxHandleWeightAdd = 12,
+        RobotPrecisionTierAdd = 13
     }
 
     /// <summary>
@@ -252,6 +257,18 @@ namespace ClikerSlash.Battle
                         level = 1,
                         isUnlocked = true
                     },
+                    new UnlockedSkillNodeState
+                    {
+                        nodeId = MetaProgressionCatalogAsset.LaneRobotUnlockNodeId,
+                        level = 1,
+                        isUnlocked = true
+                    },
+                    new UnlockedSkillNodeState
+                    {
+                        nodeId = MetaProgressionCatalogAsset.DockRobotUnlockNodeId,
+                        level = 1,
+                        isUnlocked = true
+                    },
                 },
                 selectedAutomationFlags = new List<string>(),
                 resolvedLoadoutVersion = 1
@@ -267,16 +284,22 @@ namespace ClikerSlash.Battle
         menuName = "ClikerSlash/Meta/Meta Progression Catalog")]
     public sealed class MetaProgressionCatalogAsset : ScriptableObject
     {
-        public const int DefaultSchemaVersion = 3;
+        public const int DefaultSchemaVersion = 4;
         public const string DefaultResourcePath = "MetaProgression/DefaultMetaProgressionCatalog";
         public const string StarterVitalityNodeId = "vitality.basic_stamina_training";
         public const string LaneExpansionNodeIdTier1 = "management.lane_expansion_i";
         public const string LaneExpansionNodeIdTier2 = "management.lane_expansion_ii";
         public const string LaneExpansionNodeIdTier3 = "management.lane_expansion_iii";
         public const string LoadingDockUnlockNodeId = "management.loading_dock_unlock";
+        public const string LaneRobotUnlockNodeId = "robot.lane_robot_unlock";
+        public const string DockRobotUnlockNodeId = "robot.dock_robot_unlock";
+        public const string RobotPowerFrameTuningNodeId = "robot.power_frame_tuning";
+        public const string RobotPrecisionCalibrationNodeId = "robot.precision_calibration";
         public const string WeightPreviewFlag = "automation.weight_preview";
         public const string AssistArmFlag = "automation.assist_arm";
         public const string LoadingDockUnlockFlag = "center.loading_dock_access";
+        public const string LaneRobotUnlockFlag = "robot.lane_access";
+        public const string DockRobotUnlockFlag = "robot.dock_access";
 
         [Min(1)] public int schemaVersion = DefaultSchemaVersion;
         public WorkerBaseStatsDefinition workerBaseStats = WorkerBaseStatsDefinition.CreateDefault();
@@ -658,6 +681,26 @@ namespace ClikerSlash.Battle
                 });
             }
 
+            if (FindUnlockedNodeState(startingProgression.unlockedNodeStates, LaneRobotUnlockNodeId) == null)
+            {
+                startingProgression.unlockedNodeStates.Add(new UnlockedSkillNodeState
+                {
+                    nodeId = LaneRobotUnlockNodeId,
+                    level = 1,
+                    isUnlocked = true
+                });
+            }
+
+            if (FindUnlockedNodeState(startingProgression.unlockedNodeStates, DockRobotUnlockNodeId) == null)
+            {
+                startingProgression.unlockedNodeStates.Add(new UnlockedSkillNodeState
+                {
+                    nodeId = DockRobotUnlockNodeId,
+                    level = 1,
+                    isUnlocked = true
+                });
+            }
+
             startingProgression.resolvedLoadoutVersion = Mathf.Max(1, startingProgression.resolvedLoadoutVersion);
         }
 
@@ -666,7 +709,7 @@ namespace ClikerSlash.Battle
             return branchId switch
             {
                 SkillBranchId.Management => SkillTreeTabId.Center,
-                SkillBranchId.Automation => SkillTreeTabId.Robot,
+                SkillBranchId.Automation or SkillBranchId.RobotPower or SkillBranchId.RobotPrecision => SkillTreeTabId.Robot,
                 _ => SkillTreeTabId.Human
             };
         }
@@ -680,7 +723,9 @@ namespace ClikerSlash.Battle
                 new SkillBranchDefinition { tabId = SkillTreeTabId.Human, branchId = SkillBranchId.Mobility, displayName = "이동", sortOrder = 2 },
                 new SkillBranchDefinition { tabId = SkillTreeTabId.Human, branchId = SkillBranchId.Mastery, displayName = "숙련", sortOrder = 3 },
                 new SkillBranchDefinition { tabId = SkillTreeTabId.Center, branchId = SkillBranchId.Management, displayName = "경영", sortOrder = 4 },
-                new SkillBranchDefinition { tabId = SkillTreeTabId.Robot, branchId = SkillBranchId.Automation, displayName = "자동화", sortOrder = 5 }
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Robot, branchId = SkillBranchId.Automation, displayName = "자동화", sortOrder = 5 },
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Robot, branchId = SkillBranchId.RobotPower, displayName = "파워", sortOrder = 6 },
+                new SkillBranchDefinition { tabId = SkillTreeTabId.Robot, branchId = SkillBranchId.RobotPrecision, displayName = "세밀함", sortOrder = 7 }
             };
         }
 
@@ -809,7 +854,43 @@ namespace ClikerSlash.Battle
                     1,
                     3,
                     new List<string> { "automation.return_belt" },
-                    UnlockFlagEffect(AssistArmFlag))
+                    UnlockFlagEffect(AssistArmFlag)),
+                CreateNode(
+                    LaneRobotUnlockNodeId,
+                    SkillBranchId.RobotPower,
+                    "레인 로봇 오픈",
+                    1,
+                    1,
+                    1,
+                    new List<string>(),
+                    UnlockRobotFlagEffect(LaneRobotUnlockFlag)),
+                CreateNode(
+                    DockRobotUnlockNodeId,
+                    SkillBranchId.RobotPower,
+                    "Dock 로봇 오픈",
+                    1,
+                    1,
+                    1,
+                    new List<string>(),
+                    UnlockRobotFlagEffect(DockRobotUnlockFlag)),
+                CreateNode(
+                    RobotPowerFrameTuningNodeId,
+                    SkillBranchId.RobotPower,
+                    "파워 프레임 튜닝",
+                    2,
+                    5,
+                    2,
+                    new List<string> { LaneRobotUnlockNodeId },
+                    AddIntEffect(SkillEffectType.RobotMaxHandleWeightAdd, 2)),
+                CreateNode(
+                    RobotPrecisionCalibrationNodeId,
+                    SkillBranchId.RobotPrecision,
+                    "정밀 교정",
+                    1,
+                    1,
+                    2,
+                    new List<string> { DockRobotUnlockNodeId },
+                    AddIntEffect(SkillEffectType.RobotPrecisionTierAdd, 1))
             };
         }
 
@@ -1186,6 +1267,16 @@ namespace ClikerSlash.Battle
             return new SkillEffectDefinition
             {
                 effectType = SkillEffectType.CenterUnlockFlag,
+                operation = SkillEffectOperation.Unlock,
+                targetKey = targetKey
+            };
+        }
+
+        private static SkillEffectDefinition UnlockRobotFlagEffect(string targetKey)
+        {
+            return new SkillEffectDefinition
+            {
+                effectType = SkillEffectType.RobotUnlockFlag,
                 operation = SkillEffectOperation.Unlock,
                 targetKey = targetKey
             };

@@ -40,6 +40,10 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(resolved.LaneMoveDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseLaneMoveDurationSeconds).Within(0.001f));
             Assert.That(resolved.SessionDurationSeconds, Is.EqualTo(catalog.workerBaseStats.baseSessionDurationSeconds).Within(0.001f));
             Assert.That(resolved.HasLoadingDockAccess, Is.True);
+            Assert.That(resolved.HasLaneRobotAccess, Is.True);
+            Assert.That(resolved.HasDockRobotAccess, Is.True);
+            Assert.That(resolved.RobotMaxHandleWeight, Is.EqualTo(ResolvedMetaProgression.BaseRobotMaxHandleWeight));
+            Assert.That(resolved.RobotPrecisionTier, Is.Zero);
             yield return null;
         }
 
@@ -60,9 +64,13 @@ namespace ClikerSlash.Tests.PlayMode
 
             Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.Management, out var managementBranch), Is.True);
             Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.Automation, out var automationBranch), Is.True);
+            Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.RobotPower, out var robotPowerBranch), Is.True);
+            Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.RobotPrecision, out var robotPrecisionBranch), Is.True);
             Assert.That(catalog.TryGetBranchDefinition(SkillBranchId.Vitality, out var vitalityBranch), Is.True);
             Assert.That(managementBranch.tabId, Is.EqualTo(SkillTreeTabId.Center));
             Assert.That(automationBranch.tabId, Is.EqualTo(SkillTreeTabId.Robot));
+            Assert.That(robotPowerBranch.tabId, Is.EqualTo(SkillTreeTabId.Robot));
+            Assert.That(robotPrecisionBranch.tabId, Is.EqualTo(SkillTreeTabId.Robot));
             Assert.That(vitalityBranch.tabId, Is.EqualTo(SkillTreeTabId.Human));
 
             Assert.That(catalog.TryGetNodeDefinition(MetaProgressionCatalogAsset.LoadingDockUnlockNodeId, out var loadingDockNode), Is.True);
@@ -78,6 +86,35 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(status.tabDisplayName, Is.EqualTo("물류 센터 성능"));
             Assert.That(status.isUnlocked, Is.True);
             Assert.That(status.isLocked, Is.False);
+            yield return null;
+        }
+
+        /// <summary>
+        /// 로봇 기본 해금과 파워/세밀함 노드 집계가 의도한 한도와 타입 판정을 만들어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator RobotNodesResolvePowerAndPrecisionRules()
+        {
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
+
+            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
+            Assert.That(resolved.HasLaneRobotAccess, Is.True);
+            Assert.That(resolved.HasDockRobotAccess, Is.True);
+            Assert.That(resolved.RobotMaxHandleWeight, Is.EqualTo(ResolvedMetaProgression.BaseRobotMaxHandleWeight));
+            Assert.That(RobotHandlingRules.CanHandle(resolved.RobotMaxHandleWeight, resolved.RobotPrecisionTier, LoadingDockCargoKind.Fragile, 6), Is.False);
+
+            for (var level = 0; level < 5; level += 1)
+            {
+                Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.RobotPowerFrameTuningNodeId), Is.True);
+            }
+
+            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.RobotPrecisionCalibrationNodeId), Is.True);
+            resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
+
+            Assert.That(resolved.RobotMaxHandleWeight, Is.EqualTo(16));
+            Assert.That(resolved.RobotPrecisionTier, Is.EqualTo(1));
+            Assert.That(RobotHandlingRules.CanHandle(resolved.RobotMaxHandleWeight, resolved.RobotPrecisionTier, LoadingDockCargoKind.Fragile, 6), Is.True);
             yield return null;
         }
 
@@ -275,7 +312,7 @@ namespace ClikerSlash.Tests.PlayMode
             treeView.SelectTab(SkillTreeTabId.Robot);
             treeView.Refresh(snapshot, catalog, MetaProgressionCatalogAsset.StarterVitalityNodeId);
             Assert.That(treeView.ActiveTabId, Is.EqualTo(SkillTreeTabId.Robot));
-            Assert.That(treeView.VisibleBranchCount, Is.EqualTo(1));
+            Assert.That(treeView.VisibleBranchCount, Is.EqualTo(3));
 
             Object.Destroy(viewportObject);
             yield return null;
@@ -337,7 +374,7 @@ namespace ClikerSlash.Tests.PlayMode
             legacyCatalog.EnsureDefaults();
 
             Assert.That(legacyCatalog.skillTabs.Count, Is.EqualTo(3));
-            Assert.That(legacyCatalog.skillBranches.Count, Is.EqualTo(6));
+            Assert.That(legacyCatalog.skillBranches.Count, Is.EqualTo(8));
             Assert.That(legacyCatalog.centerTree, Is.Null);
             Assert.That(legacyCatalog.humanTree, Is.Null);
             Assert.That(legacyCatalog.robotTree, Is.Null);

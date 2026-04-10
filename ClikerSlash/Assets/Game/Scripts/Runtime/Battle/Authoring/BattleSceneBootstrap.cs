@@ -61,6 +61,7 @@ namespace ClikerSlash.Battle
             DestroyExistingSingletons(entityManager, typeof(CargoConfig));
             DestroyExistingSingletons(entityManager, typeof(LaneLayout));
             DestroyEntities(entityManager, typeof(PlayerTag));
+            DestroyEntities(entityManager, typeof(LaneRobotTag));
             DestroyEntities(entityManager, typeof(CargoTag));
             DestroyEntities(entityManager, typeof(CargoHandledEvent));
             DestroyEntities(entityManager, typeof(CargoMissedEvent));
@@ -94,7 +95,9 @@ namespace ClikerSlash.Battle
             var cargoEntity = entityManager.CreateEntity(typeof(CargoConfig));
             entityManager.SetComponentData(cargoEntity, new CargoConfig
             {
-                Weight = cargoAuthoring.Weight,
+                StandardWeight = cargoAuthoring.StandardWeight,
+                FragileWeight = cargoAuthoring.FragileWeight,
+                HeavyWeight = cargoAuthoring.HeavyWeight,
                 Reward = cargoAuthoring.Reward,
                 Penalty = cargoAuthoring.Penalty,
                 Y = cargoAuthoring.Y,

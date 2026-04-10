@@ -166,7 +166,8 @@ namespace ClikerSlash.Battle
                 {
                     SlotIndex = slotIndex,
                     EntryId = entry.EntryId,
-                    Kind = entry.Kind
+                    Kind = entry.Kind,
+                    Weight = entry.Weight
                 });
             }
 
@@ -186,10 +187,24 @@ namespace ClikerSlash.Battle
         /// </summary>
         public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind)
         {
+            var defaultWeight = kind switch
+            {
+                LoadingDockCargoKind.Heavy => 12,
+                _ => 6
+            };
+            EnqueueLoadingDockCargo(kind, defaultWeight);
+        }
+
+        /// <summary>
+        /// 레인에서 성공 처리된 물류를 무게 정보와 함께 상하차 세션 큐에 적재합니다.
+        /// </summary>
+        public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind, int weight)
+        {
             var queueEntry = new LoadingDockCargoQueueEntry
             {
                 EntryId = _nextLoadingDockCargoEntryId,
-                Kind = kind
+                Kind = kind,
+                Weight = weight
             };
             _nextLoadingDockCargoEntryId += 1;
 

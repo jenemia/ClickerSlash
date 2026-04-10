@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Entities;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -19,6 +20,7 @@ namespace ClikerSlash.Battle
         private readonly LoadingDockCargoViewPool _cargoViewPool = new();
         private bool _wasLoadingDockActive;
         private Transform _cargoViewRoot;
+        private double _nextDockRobotHandleTime;
 
         public void BindSceneReferences(
             Camera targetCamera,
@@ -60,8 +62,12 @@ namespace ClikerSlash.Battle
             _wasLoadingDockActive = isLoadingDockActive;
             if (isLoadingDockActive)
             {
+                TryHandleDockRobotCargo();
                 HandlePointerInput();
+                return;
             }
+
+            _nextDockRobotHandleTime = 0d;
         }
 
         private void OnGUI()
@@ -89,7 +95,7 @@ namespace ClikerSlash.Battle
 
             foreach (var entry in activeEntries)
             {
-                GUILayout.Label($"#{entry.EntryId} {DescribeCargoKind(entry.Kind)}");
+                GUILayout.Label($"#{entry.EntryId} {DescribeCargoKind(entry.Kind)} / {entry.Weight}kg");
             }
 
             GUILayout.EndArea();
@@ -141,6 +147,55 @@ namespace ClikerSlash.Battle
         public bool TryDeliverCargoEntry(int entryId)
         {
             return PrototypeSessionRuntime.TryDeliverLoadingDockCargo(entryId, out _);
+        }
+
+        private void TryHandleDockRobotCargo()
+        {
+            var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
+            if (!resolvedProgression.HasDockRobotAccess)
+            {
+                return;
+            }
+
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !world.IsCreated)
+            {
+                return;
+            }
+
+            var entityManager = world.EntityManager;
+            using var battleConfigQuery = entityManager.CreateEntityQuery(typeof(BattleConfig));
+            if (battleConfigQuery.IsEmptyIgnoreFilter)
+            {
+                return;
+            }
+
+            var now = Time.unscaledTimeAsDouble;
+            if (_nextDockRobotHandleTime > now)
+            {
+                return;
+            }
+
+            var battleConfig = battleConfigQuery.GetSingleton<BattleConfig>();
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            foreach (var entry in activeEntries)
+            {
+                if (!RobotHandlingRules.CanHandle(
+                        resolvedProgression.RobotMaxHandleWeight,
+                        resolvedProgression.RobotPrecisionTier,
+                        entry.Kind,
+                        entry.Weight))
+                {
+                    continue;
+                }
+
+                if (TryDeliverCargoEntry(entry.EntryId))
+                {
+                    _nextDockRobotHandleTime = now + battleConfig.HandleDurationSeconds;
+                }
+
+                return;
+            }
         }
 
         private void HandlePointerInput()

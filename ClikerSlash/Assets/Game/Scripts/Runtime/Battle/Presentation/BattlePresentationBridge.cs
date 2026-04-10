@@ -27,7 +27,10 @@ namespace ClikerSlash.Battle
         private World _cachedWorld;
         private EntityQuery _playerQuery;
         private EntityQuery _cargoQuery;
+        private EntityQuery _laneRobotQuery;
         private GameObject _playerInstance;
+        private GameObject _laneRobotInstance;
+        private GameObject _dockRobotInstance;
         private readonly Dictionary<Entity, GameObject> _cargoInstances = new();
         private bool _cameraRigInitialized;
         private bool _dockCameraIsLive;
@@ -49,7 +52,9 @@ namespace ClikerSlash.Battle
             }
 
             SyncPlayer(entityManager);
+            SyncLaneRobot(entityManager);
             SyncCargo(entityManager);
+            SyncDockRobot();
         }
 
         /// <summary>
@@ -104,6 +109,10 @@ namespace ClikerSlash.Battle
                 ComponentType.ReadOnly<CargoTag>(),
                 ComponentType.ReadOnly<CargoKind>(),
                 ComponentType.ReadOnly<LocalTransform>());
+            _laneRobotQuery = entityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<LaneRobotTag>(),
+                ComponentType.ReadOnly<LaneRobotState>(),
+                ComponentType.ReadOnly<LocalTransform>());
             return true;
         }
 
@@ -122,6 +131,41 @@ namespace ClikerSlash.Battle
             }
 
             _playerInstance.transform.position = transforms[0].Position;
+        }
+
+        private void SyncLaneRobot(EntityManager entityManager)
+        {
+            if (playerViewPrefab == null || _laneRobotQuery.IsEmptyIgnoreFilter)
+            {
+                if (_laneRobotInstance != null)
+                {
+                    _laneRobotInstance.SetActive(false);
+                }
+
+                return;
+            }
+
+            using var laneRobotStates = _laneRobotQuery.ToComponentDataArray<LaneRobotState>(Allocator.Temp);
+            using var transforms = _laneRobotQuery.ToComponentDataArray<LocalTransform>(Allocator.Temp);
+            if (laneRobotStates.Length == 0)
+            {
+                return;
+            }
+
+            if (_laneRobotInstance == null)
+            {
+                _laneRobotInstance = CreateRobotInstance("LaneRobotView", new Color(0.92f, 0.55f, 0.18f), 0.9f);
+            }
+
+            var laneRobotState = laneRobotStates[0];
+            var shouldShow = laneRobotState.IsAssigned != 0;
+            _laneRobotInstance.SetActive(shouldShow);
+            if (!shouldShow)
+            {
+                return;
+            }
+
+            _laneRobotInstance.transform.position = transforms[0].Position;
         }
 
         private void SyncLoadingDockCamera()
@@ -253,6 +297,58 @@ namespace ClikerSlash.Battle
             ListPool<Entity>.Release(staleEntities);
         }
 
+        private void SyncDockRobot()
+        {
+            if (playerViewPrefab == null || loadingDockEnvironment == null)
+            {
+                if (_dockRobotInstance != null)
+                {
+                    _dockRobotInstance.SetActive(false);
+                }
+
+                return;
+            }
+
+            var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
+            var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
+            var shouldShow = resolvedProgression.HasDockRobotAccess &&
+                             loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
+                             loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+
+            if (_dockRobotInstance == null)
+            {
+                _dockRobotInstance = CreateRobotInstance("DockRobotView", new Color(0.28f, 0.86f, 0.64f), 0.82f);
+            }
+
+            _dockRobotInstance.SetActive(shouldShow);
+            if (!shouldShow)
+            {
+                return;
+            }
+
+            var anchor = loadingDockEnvironment.dockRobotAnchor != null
+                ? loadingDockEnvironment.dockRobotAnchor
+                : loadingDockEnvironment.truckDropZone;
+            if (anchor != null)
+            {
+                _dockRobotInstance.transform.position = anchor.position;
+            }
+        }
+
+        private GameObject CreateRobotInstance(string name, Color color, float scale)
+        {
+            var robotInstance = Instantiate(playerViewPrefab, transform);
+            robotInstance.name = name;
+            robotInstance.transform.localScale = Vector3.one * scale;
+
+            foreach (var renderer in robotInstance.GetComponentsInChildren<Renderer>())
+            {
+                renderer.material.color = color;
+            }
+
+            return robotInstance;
+        }
+
         private void CleanupAllViews()
         {
             if (_playerInstance != null)
@@ -269,6 +365,18 @@ namespace ClikerSlash.Battle
                 }
             }
             _cargoInstances.Clear();
+
+            if (_laneRobotInstance != null)
+            {
+                Destroy(_laneRobotInstance);
+                _laneRobotInstance = null;
+            }
+
+            if (_dockRobotInstance != null)
+            {
+                Destroy(_dockRobotInstance);
+                _dockRobotInstance = null;
+            }
         }
 
         private void OnDisable()

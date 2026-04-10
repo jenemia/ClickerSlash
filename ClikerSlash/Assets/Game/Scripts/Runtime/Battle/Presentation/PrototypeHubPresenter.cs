@@ -288,6 +288,19 @@ namespace ClikerSlash.Battle
                         ? "상하차 구역 해금"
                         : $"{effect.targetKey} 해금";
 
+                case SkillEffectType.RobotUnlockFlag:
+                    return effect.targetKey == MetaProgressionCatalogAsset.LaneRobotUnlockFlag
+                        ? "레인 로봇 해금"
+                        : effect.targetKey == MetaProgressionCatalogAsset.DockRobotUnlockFlag
+                            ? "Dock 로봇 해금"
+                            : $"{effect.targetKey} 해금";
+
+                case SkillEffectType.RobotMaxHandleWeightAdd:
+                    return $"로봇 중량 한도 +{effect.intValue}";
+
+                case SkillEffectType.RobotPrecisionTierAdd:
+                    return $"로봇 세밀함 +{effect.intValue}";
+
                 default:
                     return effect.effectType.ToString();
             }

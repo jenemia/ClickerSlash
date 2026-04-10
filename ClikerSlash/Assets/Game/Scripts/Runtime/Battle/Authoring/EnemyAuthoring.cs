@@ -8,7 +8,9 @@ namespace ClikerSlash.Battle
     /// </summary>
     public sealed class CargoAuthoring : MonoBehaviour
     {
-        [Min(1)] public int Weight = 6;
+        [Min(1)] public int StandardWeight = 6;
+        [Min(1)] public int FragileWeight = 6;
+        [Min(1)] public int HeavyWeight = 12;
         [Min(1)] public int Reward = 60;
         [Min(1)] public int Penalty = 35;
         public float Y = 0.6f;
@@ -28,7 +30,9 @@ namespace ClikerSlash.Battle
             var entity = GetEntity(TransformUsageFlags.None);
             AddComponent(entity, new CargoConfig
             {
-                Weight = authoring.Weight,
+                StandardWeight = authoring.StandardWeight,
+                FragileWeight = authoring.FragileWeight,
+                HeavyWeight = authoring.HeavyWeight,
                 Reward = authoring.Reward,
                 Penalty = authoring.Penalty,
                 Y = authoring.Y,

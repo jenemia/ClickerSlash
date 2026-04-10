@@ -34,7 +34,9 @@ namespace ClikerSlash.Battle
     /// </summary>
     public struct CargoConfig : IComponentData
     {
-        public int Weight;
+        public int StandardWeight;
+        public int FragileWeight;
+        public int HeavyWeight;
         public int Reward;
         public int Penalty;
         public float Y;
@@ -231,6 +233,7 @@ namespace ClikerSlash.Battle
     {
         public int Reward;
         public LoadingDockCargoKind Kind;
+        public int Weight;
     }
 
     /// <summary>
@@ -239,5 +242,45 @@ namespace ClikerSlash.Battle
     public struct CargoMissedEvent : IComponentData
     {
         public int Penalty;
+    }
+
+    /// <summary>
+    /// 레인에 배치되는 보조 로봇 엔티티임을 나타냅니다.
+    /// </summary>
+    public struct LaneRobotTag : IComponentData
+    {
+    }
+
+    /// <summary>
+    /// 레인 로봇의 배치 상태를 저장합니다.
+    /// </summary>
+    public struct LaneRobotState : IComponentData
+    {
+        public int AssignedLane;
+        // 0은 아직 미배치, 1은 세션 중 배치가 확정된 상태를 뜻합니다.
+        public byte IsAssigned;
+    }
+
+    /// <summary>
+    /// 레인 로봇과 Dock 로봇이 공통으로 사용하는 처리 가능 여부 판정 유틸리티입니다.
+    /// </summary>
+    public static class RobotHandlingRules
+    {
+        /// <summary>
+        /// 현재 로봇 스펙으로 지정한 물류를 처리할 수 있는지 계산합니다.
+        /// </summary>
+        public static bool CanHandle(int maxHandleWeight, int precisionTier, LoadingDockCargoKind kind, int weight)
+        {
+            if (weight > maxHandleWeight)
+            {
+                return false;
+            }
+
+            return kind switch
+            {
+                LoadingDockCargoKind.Fragile => precisionTier >= 1,
+                _ => true
+            };
+        }
     }
 }

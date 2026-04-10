@@ -86,6 +86,73 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
+        /// 배치된 레인 로봇은 자신의 레인에서 처리 가능한 물류만 플레이어보다 먼저 가져가야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LaneRobotHandlesOnlyAssignedLaneCargo()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            FreezeRandomSpawns(entityManager);
+
+            var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
+            var laneRobotEntity = entityManager.CreateEntityQuery(typeof(LaneRobotTag)).GetSingletonEntity();
+            entityManager.SetComponentData(laneRobotEntity, new LaneRobotState
+            {
+                AssignedLane = 0,
+                IsAssigned = 1
+            });
+
+            SpawnCargo(entityManager, 0, battleConfig.JudgmentLineZ, 6, 50, 20, 0f, LoadingDockCargoKind.Standard);
+            SpawnCargo(entityManager, 3, battleConfig.JudgmentLineZ, 6, 50, 20, 0f, LoadingDockCargoKind.Standard);
+            yield return null;
+            yield return null;
+
+            var stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            var remainingCargoCount = entityManager.CreateEntityQuery(typeof(CargoTag)).CalculateEntityCount();
+
+            Assert.That(stats.ProcessedCargoCount, Is.EqualTo(1));
+            Assert.That(activeEntries.Length, Is.EqualTo(1));
+            Assert.That(activeEntries[0].Kind, Is.EqualTo(LoadingDockCargoKind.Standard));
+            Assert.That(activeEntries[0].Weight, Is.EqualTo(6));
+            Assert.That(remainingCargoCount, Is.EqualTo(1));
+        }
+
+        /// <summary>
+        /// 세밀함 해금 전에는 Fragile 물류가 레인 로봇에게 잡히지 않고 그대로 남아야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LaneRobotLeavesFragileCargoForPlayerWhenPrecisionIsLocked()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            FreezeRandomSpawns(entityManager);
+
+            var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
+            var laneRobotEntity = entityManager.CreateEntityQuery(typeof(LaneRobotTag)).GetSingletonEntity();
+            entityManager.SetComponentData(laneRobotEntity, new LaneRobotState
+            {
+                AssignedLane = 0,
+                IsAssigned = 1
+            });
+
+            SpawnCargo(entityManager, 0, battleConfig.JudgmentLineZ, 6, 50, 20, 0f, LoadingDockCargoKind.Fragile);
+            yield return null;
+            yield return null;
+
+            var stats = entityManager.CreateEntityQuery(typeof(BattleSessionStatsState)).GetSingleton<BattleSessionStatsState>();
+            var remainingCargoCount = entityManager.CreateEntityQuery(typeof(CargoTag)).CalculateEntityCount();
+
+            Assert.That(stats.ProcessedCargoCount, Is.Zero);
+            Assert.That(remainingCargoCount, Is.EqualTo(1));
+        }
+
+        /// <summary>
         /// 작업시간 종료 후 결과 스냅샷이 허브까지 전달되는지 검증합니다.
         /// </summary>
         [UnityTest]
@@ -333,13 +400,13 @@ namespace ClikerSlash.Tests.PlayMode
         {
             PrototypeSessionRuntime.ResetPrototypeState();
 
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
 
             var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
             var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
@@ -376,7 +443,8 @@ namespace ClikerSlash.Tests.PlayMode
             entityManager.AddComponentData(handledEvent, new CargoHandledEvent
             {
                 Reward = 25,
-                Kind = LoadingDockCargoKind.Fragile
+                Kind = LoadingDockCargoKind.Fragile,
+                Weight = 6
             });
 
             var missedEvent = entityManager.CreateEntity();
@@ -394,6 +462,7 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(activeEntries.Length, Is.EqualTo(1));
             Assert.That(activeEntries[0].SlotIndex, Is.EqualTo(0));
             Assert.That(activeEntries[0].Kind, Is.EqualTo(LoadingDockCargoKind.Fragile));
+            Assert.That(activeEntries[0].Weight, Is.EqualTo(6));
         }
 
         /// <summary>
@@ -607,6 +676,7 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockEnvironment.truckBayRoot, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoThrowOrigin, Is.Not.Null);
             Assert.That(loadingDockEnvironment.truckDropZone, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.dockRobotAnchor, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors.Length, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
             foreach (var slotAnchor in loadingDockEnvironment.cargoSlotAnchors)
@@ -672,6 +742,37 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
+        /// Dock 로봇은 처리 가능한 슬롯만 자동 delivered 하고 불가 슬롯은 그대로 남겨야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator DockRobotAutoDeliversOnlyHandleableCargo()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
+            yield return new WaitForSeconds(battleConfig.HandleDurationSeconds + 0.05f);
+            yield return null;
+
+            var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+
+            Assert.That(snapshot.TotalCount, Is.EqualTo(1));
+            Assert.That(activeEntries.Length, Is.EqualTo(1));
+            Assert.That(activeEntries[0].Kind, Is.EqualTo(LoadingDockCargoKind.Fragile));
+            Assert.That(activeEntries[0].Weight, Is.EqualTo(6));
+        }
+
+        /// <summary>
         /// 상하차 presenter는 세션 큐를 기준으로 최대 5개의 슬롯만 표시해야 합니다.
         /// </summary>
         [UnityTest]
@@ -680,12 +781,12 @@ namespace ClikerSlash.Tests.PlayMode
             PrototypeSessionRuntime.ResetPrototypeState();
             yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
 
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
 
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
@@ -716,9 +817,9 @@ namespace ClikerSlash.Tests.PlayMode
             PrototypeSessionRuntime.ResetPrototypeState();
             yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
 
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
             yield return null;
             yield return null;
 
@@ -742,12 +843,12 @@ namespace ClikerSlash.Tests.PlayMode
         {
             PrototypeSessionRuntime.ResetPrototypeState();
 
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
 
             var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
@@ -777,9 +878,9 @@ namespace ClikerSlash.Tests.PlayMode
             PrototypeSessionRuntime.ResetPrototypeState();
             yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
 
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
-            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
