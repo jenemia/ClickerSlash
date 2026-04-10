@@ -176,9 +176,7 @@ namespace ClikerSlash.Battle
             }
 
             var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
-            var shouldUseDockCamera =
-                dockState.TransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
-                dockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+            var shouldUseDockCamera = ShouldUseLoadingDockCamera(dockState);
 
             if (_dockCameraIsLive == shouldUseDockCamera)
             {
@@ -223,7 +221,19 @@ namespace ClikerSlash.Battle
             return true;
         }
 
-        private static CinemachineCamera FindVirtualCamera(string cameraName)
+        /// <summary>
+        /// 현재 작업 영역 상태가 적재구역 시점을 메인 카메라로 써야 하는 상황인지 판정합니다.
+        /// </summary>
+        internal static bool ShouldUseLoadingDockCamera(LoadingDockRuntimeState dockState)
+        {
+            return dockState.TransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
+                   dockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+        }
+
+        /// <summary>
+        /// 씬 빌더와 프리뷰 프레젠터가 이름으로 가상 카메라를 재연결할 수 있게 도와줍니다.
+        /// </summary>
+        internal static CinemachineCamera FindVirtualCamera(string cameraName)
         {
             var cameras = FindObjectsByType<CinemachineCamera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             foreach (var camera in cameras)
