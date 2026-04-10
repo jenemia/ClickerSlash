@@ -312,6 +312,7 @@ namespace ClikerSlash.Battle
             var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
             var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
             var shouldShow = resolvedProgression.HasDockRobotAccess &&
+                             PrototypeSessionRuntime.HasInstalledDockRobot() &&
                              loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
                              loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
 

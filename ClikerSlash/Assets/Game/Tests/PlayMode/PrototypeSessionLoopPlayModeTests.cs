@@ -754,6 +754,7 @@ namespace ClikerSlash.Tests.PlayMode
             PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
 
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.SetDockRobotInstalled(true, catalog), Is.True);
             Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
             yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
             yield return null;

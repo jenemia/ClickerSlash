@@ -41,6 +41,7 @@ namespace ClikerSlash.Battle
         private static bool _hasPendingLoadingDockEntryRequest;
         private static bool _hasPendingLoadingDockReturnRequest;
         private static float _loadingDockTransitionElapsed;
+        private static bool _hasInstalledDockRobot;
         private static readonly Queue<LoadingDockCargoQueueEntry> _loadingDockBacklogQueue = new();
         private static readonly LoadingDockCargoQueueEntry?[] _loadingDockActiveSlots = new LoadingDockCargoQueueEntry?[MaxLoadingDockActiveSlotCount];
         private static int _nextLoadingDockCargoEntryId = 1;
@@ -105,6 +106,35 @@ namespace ClikerSlash.Battle
             }
 
             return _metaProgressionRuntimeState.resolvedProgression;
+        }
+
+        /// <summary>
+        /// 현재 세션에서 Dock 로봇이 실제로 설치된 상태인지 반환합니다.
+        /// </summary>
+        public static bool HasInstalledDockRobot()
+        {
+            return _hasInstalledDockRobot;
+        }
+
+        /// <summary>
+        /// Dock 로봇 해금 여부를 확인한 뒤 세션 설치 상태를 변경합니다.
+        /// </summary>
+        public static bool SetDockRobotInstalled(bool isInstalled, MetaProgressionCatalogAsset catalog = null, int physicalLaneCount = int.MaxValue)
+        {
+            if (!isInstalled)
+            {
+                _hasInstalledDockRobot = false;
+                return true;
+            }
+
+            EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
+            if (!_metaProgressionRuntimeState.resolvedProgression.HasDockRobotAccess)
+            {
+                return false;
+            }
+
+            _hasInstalledDockRobot = true;
+            return true;
         }
 
         /// <summary>
@@ -321,6 +351,7 @@ namespace ClikerSlash.Battle
             _hasPendingLoadingDockEntryRequest = false;
             _hasPendingLoadingDockReturnRequest = false;
             _loadingDockTransitionElapsed = 0f;
+            _hasInstalledDockRobot = false;
             _metaProgressionRuntimeState = null;
         }
 

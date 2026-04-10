@@ -152,7 +152,7 @@ namespace ClikerSlash.Battle
         private void TryHandleDockRobotCargo()
         {
             var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
-            if (!resolvedProgression.HasDockRobotAccess)
+            if (!resolvedProgression.HasDockRobotAccess || !PrototypeSessionRuntime.HasInstalledDockRobot())
             {
                 return;
             }
