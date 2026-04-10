@@ -9,6 +9,7 @@ namespace ClikerSlash.Battle
     public sealed class LoadingDockCargoViewPool
     {
         private readonly Dictionary<LoadingDockCargoKind, Stack<LoadingDockCargoView>> _poolByKind = new();
+        private Transform _poolRoot;
 
         public LoadingDockCargoView Acquire(
             int entryId,
@@ -47,6 +48,7 @@ namespace ClikerSlash.Battle
             }
 
             view.gameObject.SetActive(false);
+            view.transform.SetParent(GetOrCreatePoolRoot(), false);
             var kind = view.Kind;
             if (!_poolByKind.TryGetValue(kind, out var pool))
             {
@@ -62,6 +64,19 @@ namespace ClikerSlash.Battle
             return _poolByKind.TryGetValue(kind, out var pool) && pool.Count > 0
                 ? pool.Pop()
                 : null;
+        }
+
+        private Transform GetOrCreatePoolRoot()
+        {
+            if (_poolRoot != null)
+            {
+                return _poolRoot;
+            }
+
+            var rootObject = new GameObject("LoadingDockCargoPoolRoot");
+            rootObject.SetActive(false);
+            _poolRoot = rootObject.transform;
+            return _poolRoot;
         }
 
         private static LoadingDockCargoView CreateView(LoadingDockCargoKind kind)

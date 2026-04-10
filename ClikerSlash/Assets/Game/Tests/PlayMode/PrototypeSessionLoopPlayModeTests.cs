@@ -680,6 +680,67 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(cargoViewRoot.childCount, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
         }
 
+        /// <summary>
+        /// 큐가 비어 있는 상태로 상하차에 진입해도 오류 없이 empty state만 보여야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockPresenterSupportsEmptyQueueState()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            var cargoViewRoot = presenter != null ? presenter.transform.Find("LoadingDockCargoViewRoot") : null;
+            var snapshot = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+
+            Assert.That(presenter, Is.Not.Null);
+            Assert.That(snapshot.TotalCount, Is.Zero);
+            Assert.That(cargoViewRoot == null || cargoViewRoot.childCount == 0, Is.True);
+        }
+
+        /// <summary>
+        /// 상하차 구역을 나갔다 다시 들어와도 세션 큐와 표시 슬롯이 복원되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockQueuePersistsAcrossDockReentry()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+
+            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+
+            var firstActiveEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockReturn(), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.Lane, WorkAreaTransitionPhase.None, 120);
+
+            Assert.That(PrototypeSessionRuntime.TryRequestLoadingDockEntry(catalog), Is.True);
+            yield return WaitForDockPhase(catalog, WorkAreaType.LoadingDock, WorkAreaTransitionPhase.ActiveInLoadingDock, 120);
+            yield return null;
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            var cargoViewRoot = presenter != null ? presenter.transform.Find("LoadingDockCargoViewRoot") : null;
+            var reenteredEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+
+            Assert.That(reenteredEntries.Length, Is.EqualTo(3));
+            Assert.That(reenteredEntries[0].EntryId, Is.EqualTo(firstActiveEntries[0].EntryId));
+            Assert.That(reenteredEntries[1].EntryId, Is.EqualTo(firstActiveEntries[1].EntryId));
+            Assert.That(reenteredEntries[2].EntryId, Is.EqualTo(firstActiveEntries[2].EntryId));
+            Assert.That(cargoViewRoot, Is.Not.Null);
+            Assert.That(cargoViewRoot.childCount, Is.EqualTo(3));
+        }
+
         private static IEnumerator LoadSceneAndWait(string sceneName)
         {
             SceneManager.LoadScene(sceneName);

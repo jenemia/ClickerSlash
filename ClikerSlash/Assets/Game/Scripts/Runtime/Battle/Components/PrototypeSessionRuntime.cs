@@ -32,8 +32,6 @@ namespace ClikerSlash.Battle
         // 참이면 허브가 이전 작업에서 캡처한 결과 스냅샷을 표시해야 합니다.
         public static bool HasLastBattleResult { get; private set; }
         public static BattleResultSnapshot LastBattleResult { get; private set; }
-        public static bool HasLastLoadingDockResult { get; private set; }
-        public static LoadingDockResultSnapshot LastLoadingDockResult { get; private set; }
         public static float ResolvedWorkDurationSeconds { get; private set; }
         public static bool IsPauseMenuOpen { get; private set; }
         // 참이면 허브에서 작업 현장으로 넘어가는 중이며, 전투 씬이 아직 요청을 소비하지 않은 상태입니다.
@@ -221,7 +219,6 @@ namespace ClikerSlash.Battle
             _loadingDockBacklogQueue.Clear();
             _loadingDockActiveSlots.Clear();
             _nextLoadingDockCargoEntryId = 1;
-            ClearLastLoadingDockResult();
         }
 
         /// <summary>
@@ -250,24 +247,6 @@ namespace ClikerSlash.Battle
         {
             HasLastBattleResult = false;
             LastBattleResult = default;
-        }
-
-        /// <summary>
-        /// 상하차 라운드 결과를 현재 세션 요약으로 저장합니다.
-        /// </summary>
-        public static void StoreLoadingDockResult(LoadingDockResultSnapshot snapshot)
-        {
-            HasLastLoadingDockResult = true;
-            LastLoadingDockResult = snapshot;
-        }
-
-        /// <summary>
-        /// 이전 상하차 라운드 결과를 지웁니다.
-        /// </summary>
-        public static void ClearLastLoadingDockResult()
-        {
-            HasLastLoadingDockResult = false;
-            LastLoadingDockResult = default;
         }
 
         /// <summary>
