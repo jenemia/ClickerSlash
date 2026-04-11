@@ -43,6 +43,7 @@ namespace ClikerSlash.Editor
             var accentMaterial = GetOrCreateMaterial(assetLocator, BattleAssetKeys.AccentMaterial, new Color(0.95f, 0.75f, 0.10f));
 
             var workerPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.PlayerView, workerMaterial, new Vector3(1.1f, 1.1f, 1.1f), keepCollider: false, addCargoViewComponent: false);
+            var battlePlayerPrefab = LoadRequiredPrefab("Assets/UnityTechnologies/SpaceRobotKyle/Prefabs/RobotKyle.prefab");
             var standardCargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.StandardCargoView, standardCargoMaterial, new Vector3(0.9f, 0.9f, 0.9f), keepCollider: true, addCargoViewComponent: true);
             var fragileCargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.FragileCargoView, fragileCargoMaterial, new Vector3(0.82f, 0.82f, 0.82f), keepCollider: true, addCargoViewComponent: true);
             var heavyCargoPrefab = GetOrCreateCubePrefab(assetLocator, BattleAssetKeys.HeavyCargoView, heavyCargoMaterial, new Vector3(1.08f, 1.08f, 1.08f), keepCollider: true, addCargoViewComponent: true);
@@ -59,6 +60,7 @@ namespace ClikerSlash.Editor
             var loadingDockEnvironment = CreateLoadingDockEnvironment(battleView, laneMaterial, accentMaterial, cargoMaterial, workerMaterial);
             CreateConfigRoots(battleView, laneRoot);
             CreatePresentationRoot(
+                battlePlayerPrefab,
                 workerPrefab,
                 cargoVisualPrefabs,
                 mainCamera,
@@ -335,7 +337,8 @@ namespace ClikerSlash.Editor
         }
 
         private static void CreatePresentationRoot(
-            GameObject workerPrefab,
+            GameObject playerPrefab,
+            GameObject supportRobotPrefab,
             CargoVisualPrefabSet cargoVisualPrefabs,
             Camera mainCamera,
             BattleViewAuthoring battleView,
@@ -369,7 +372,7 @@ namespace ClikerSlash.Editor
                 loadingDockEnvironment,
                 laneVirtualCamera,
                 loadingDockVirtualCamera);
-            bridge.BindVisualPrefabs(workerPrefab, cargoVisualPrefabs);
+            bridge.BindVisualPrefabs(playerPrefab, cargoVisualPrefabs, supportRobotPrefab);
             miniGamePresenter.BindSceneReferences(mainCamera, loadingDockEnvironment, cargoVisualPrefabs);
             conveyorPresenter.BindSceneReferences(loadingDockEnvironment);
             EditorUtility.SetDirty(bridge);
@@ -689,6 +692,17 @@ namespace ClikerSlash.Editor
 
             prefab = PrefabUtility.SaveAsPrefabAsset(cube, assetPath);
             Object.DestroyImmediate(cube);
+            return prefab;
+        }
+
+        private static GameObject LoadRequiredPrefab(string assetPath)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (prefab == null)
+            {
+                throw new System.InvalidOperationException($"Required prefab is missing: {assetPath}");
+            }
+
             return prefab;
         }
 

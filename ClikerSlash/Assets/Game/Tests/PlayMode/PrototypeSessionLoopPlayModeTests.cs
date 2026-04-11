@@ -45,6 +45,67 @@ namespace ClikerSlash.Tests.PlayMode
         }
 
         /// <summary>
+        /// 전투 씬 플레이어 뷰는 RobotKyle 하나만 런타임으로 생성되고, 레인 이동 상태에 맞춰 애니메이션이 반응해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BattlePlayerViewUsesSingleRobotKyleInstanceAndAnimatesLaneMoves()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var bridge = Object.FindFirstObjectByType<BattlePresentationBridge>();
+            Assert.That(bridge, Is.Not.Null);
+            yield return null;
+            yield return null;
+
+            var workerView = FindPresentationChild(bridge, "WorkerView");
+            Assert.That(workerView, Is.Not.Null);
+            Assert.That(CountPresentationChildren(bridge, "WorkerView"), Is.EqualTo(1));
+
+            var animator = workerView.GetComponent<Animator>();
+            Assert.That(animator, Is.Not.Null);
+
+            AssertComponentDisabledByName(workerView, "CharacterController");
+            AssertComponentMissing(workerView, "PlayerInput");
+            AssertComponentMissing(workerView, "ThirdPersonController");
+            AssertComponentMissing(workerView, "StarterAssetsInputs");
+            AssertComponentMissing(workerView, "BasicRigidBodyPush");
+
+            var workerSpawn = GameObject.Find("WorkerSpawn");
+            Assert.That(workerSpawn, Is.Not.Null);
+            var stagedRobot = FindDirectChild(workerSpawn.transform, "RobotKyle");
+            Assert.That(stagedRobot, Is.Not.Null);
+            Assert.That(stagedRobot.gameObject.activeSelf, Is.False);
+
+            Assert.That(animator.GetFloat("Speed"), Is.EqualTo(0f).Within(0.05f));
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var playerEntity = entityManager.CreateEntityQuery(typeof(PlayerTag), typeof(LaneMoveState)).GetSingletonEntity();
+            var moveState = entityManager.GetComponentData<LaneMoveState>(playerEntity);
+            moveState.StartLane = 1;
+            moveState.TargetLane = 2;
+            moveState.Progress = 0f;
+            moveState.IsMoving = 1;
+            entityManager.SetComponentData(playerEntity, moveState);
+
+            yield return null;
+            yield return null;
+
+            Assert.That(animator.GetFloat("Speed"), Is.GreaterThan(0.1f));
+
+            moveState = entityManager.GetComponentData<LaneMoveState>(playerEntity);
+            moveState.StartLane = moveState.TargetLane;
+            moveState.Progress = 0f;
+            moveState.IsMoving = 0;
+            entityManager.SetComponentData(playerEntity, moveState);
+
+            yield return null;
+            yield return null;
+
+            Assert.That(animator.GetFloat("Speed"), Is.LessThan(0.5f));
+        }
+
+        /// <summary>
         /// 성공 처리와 무게 초과 실패가 돈, 콤보, 세션 통계에 올바르게 반영되는지 검증합니다.
         /// </summary>
         [UnityTest]
@@ -1383,6 +1444,79 @@ namespace ClikerSlash.Tests.PlayMode
             }
 
             return null;
+        }
+
+        private static GameObject FindPresentationChild(BattlePresentationBridge bridge, string childName)
+        {
+            for (var index = 0; index < bridge.transform.childCount; index += 1)
+            {
+                var child = bridge.transform.GetChild(index);
+                if (child.name == childName && child.gameObject.activeInHierarchy)
+                {
+                    return child.gameObject;
+                }
+            }
+
+            return null;
+        }
+
+        private static int CountPresentationChildren(BattlePresentationBridge bridge, string childName)
+        {
+            var count = 0;
+            for (var index = 0; index < bridge.transform.childCount; index += 1)
+            {
+                var child = bridge.transform.GetChild(index);
+                if (child.name == childName && child.gameObject.activeInHierarchy)
+                {
+                    count += 1;
+                }
+            }
+
+            return count;
+        }
+
+        private static Transform FindDirectChild(Transform parent, string childName)
+        {
+            for (var index = 0; index < parent.childCount; index += 1)
+            {
+                var child = parent.GetChild(index);
+                if (child.name == childName)
+                {
+                    return child;
+                }
+            }
+
+            return null;
+        }
+
+        private static void AssertComponentDisabledByName(GameObject root, string componentTypeName)
+        {
+            var found = false;
+            foreach (var component in root.GetComponentsInChildren<Component>(true))
+            {
+                if (component == null || component.GetType().Name != componentTypeName)
+                {
+                    continue;
+                }
+
+                found = true;
+                var enabledProperty = component.GetType().GetProperty("enabled");
+                Assert.That(enabledProperty, Is.Not.Null, $"{componentTypeName} should expose an enabled property.");
+                Assert.That((bool)enabledProperty.GetValue(component), Is.False, $"{componentTypeName} should be disabled.");
+            }
+
+            Assert.That(found, Is.True, $"{componentTypeName} was not found on WorkerView.");
+        }
+
+        private static void AssertComponentMissing(GameObject root, string componentTypeName)
+        {
+            foreach (var component in root.GetComponentsInChildren<Component>(true))
+            {
+                if (component != null && component.GetType().Name == componentTypeName)
+                {
+                    Assert.Fail($"{componentTypeName} should have been removed from WorkerView.");
+                }
+            }
         }
 
         private static LoadingDockActiveCargoSlotSnapshot FindActiveEntry(

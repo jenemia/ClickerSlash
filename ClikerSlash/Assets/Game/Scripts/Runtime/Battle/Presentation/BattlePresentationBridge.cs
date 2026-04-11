@@ -14,6 +14,7 @@ namespace ClikerSlash.Battle
     public sealed class BattlePresentationBridge : MonoBehaviour
     {
         [SerializeField] private GameObject playerViewPrefab;
+        [SerializeField] private GameObject supportRobotViewPrefab;
         [SerializeField] private CargoVisualPrefabSet cargoVisualPrefabs;
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private BattleViewAuthoring battleView;
@@ -84,9 +85,15 @@ namespace ClikerSlash.Battle
         /// <summary>
         /// 레인과 상하차가 공유하는 물류 프리팹 세트를 명시적으로 연결합니다.
         /// </summary>
-        public void BindVisualPrefabs(GameObject targetPlayerViewPrefab, CargoVisualPrefabSet targetCargoVisualPrefabs)
+        public void BindVisualPrefabs(
+            GameObject targetPlayerViewPrefab,
+            CargoVisualPrefabSet targetCargoVisualPrefabs,
+            GameObject targetSupportRobotViewPrefab = null)
         {
             playerViewPrefab = targetPlayerViewPrefab;
+            supportRobotViewPrefab = targetSupportRobotViewPrefab != null
+                ? targetSupportRobotViewPrefab
+                : targetPlayerViewPrefab;
             cargoVisualPrefabs = targetCargoVisualPrefabs;
         }
 
@@ -108,6 +115,7 @@ namespace ClikerSlash.Battle
             _cachedWorld = world;
             _playerQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<PlayerTag>(),
+                ComponentType.ReadOnly<LaneMoveState>(),
                 ComponentType.ReadOnly<LocalTransform>());
             _cargoQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<CargoTag>(),
@@ -127,19 +135,27 @@ namespace ClikerSlash.Battle
                 return;
             }
 
+            using var moveStates = _playerQuery.ToComponentDataArray<LaneMoveState>(Allocator.Temp);
             using var transforms = _playerQuery.ToComponentDataArray<LocalTransform>(Allocator.Temp);
             if (_playerInstance == null)
             {
                 _playerInstance = Instantiate(playerViewPrefab, transform);
                 _playerInstance.name = "WorkerView";
+                ConfigurePlayerViewInstance(_playerInstance);
             }
 
             _playerInstance.transform.position = transforms[0].Position;
+            var direction = moveStates[0].TargetLane - moveStates[0].StartLane;
+            if (_playerInstance.TryGetComponent<BattleRobotKyleAnimatorDriver>(out var driver))
+            {
+                driver.ApplyPresentationState(moveStates[0].IsMoving != 0, Mathf.Sign(direction));
+            }
         }
 
         private void SyncLaneRobot(EntityManager entityManager)
         {
-            if (playerViewPrefab == null || _laneRobotQuery.IsEmptyIgnoreFilter)
+            var supportViewPrefab = GetSupportRobotViewPrefab();
+            if (supportViewPrefab == null || _laneRobotQuery.IsEmptyIgnoreFilter)
             {
                 if (_laneRobotInstance != null)
                 {
@@ -328,7 +344,7 @@ namespace ClikerSlash.Battle
 
         private void SyncDockRobot()
         {
-            if (playerViewPrefab == null || loadingDockEnvironment == null)
+            if (GetSupportRobotViewPrefab() == null || loadingDockEnvironment == null)
             {
                 if (_dockRobotInstance != null)
                 {
@@ -367,7 +383,13 @@ namespace ClikerSlash.Battle
 
         private GameObject CreateRobotInstance(string name, Color color, float scale)
         {
-            var robotInstance = Instantiate(playerViewPrefab, transform);
+            var supportViewPrefab = GetSupportRobotViewPrefab();
+            if (supportViewPrefab == null)
+            {
+                return null;
+            }
+
+            var robotInstance = Instantiate(supportViewPrefab, transform);
             robotInstance.name = name;
             robotInstance.transform.localScale = Vector3.one * scale;
 
@@ -377,6 +399,80 @@ namespace ClikerSlash.Battle
             }
 
             return robotInstance;
+        }
+
+        private GameObject GetSupportRobotViewPrefab()
+        {
+            return supportRobotViewPrefab != null ? supportRobotViewPrefab : playerViewPrefab;
+        }
+
+        private static void ConfigurePlayerViewInstance(GameObject playerView)
+        {
+            DisableComponentsByTypeName(
+                playerView,
+                "CharacterController");
+            DestroyComponentsByTypeName(
+                playerView,
+                "ThirdPersonController",
+                "BasicRigidBodyPush",
+                "PlayerInput",
+                "StarterAssetsInputs");
+
+            if (!playerView.TryGetComponent<BattleRobotKyleAnimatorDriver>(out _))
+            {
+                playerView.AddComponent<BattleRobotKyleAnimatorDriver>();
+            }
+        }
+
+        private static void DisableComponentsByTypeName(GameObject root, params string[] typeNames)
+        {
+            foreach (var component in root.GetComponentsInChildren<Component>(true))
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
+                var componentTypeName = component.GetType().Name;
+                for (var index = 0; index < typeNames.Length; index += 1)
+                {
+                    if (!string.Equals(componentTypeName, typeNames[index], System.StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var enabledProperty = component.GetType().GetProperty("enabled");
+                    if (enabledProperty != null && enabledProperty.CanWrite)
+                    {
+                        enabledProperty.SetValue(component, false);
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        private static void DestroyComponentsByTypeName(GameObject root, params string[] typeNames)
+        {
+            foreach (var component in root.GetComponentsInChildren<Component>(true))
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
+                var componentTypeName = component.GetType().Name;
+                for (var index = 0; index < typeNames.Length; index += 1)
+                {
+                    if (!string.Equals(componentTypeName, typeNames[index], System.StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    Destroy(component);
+                    break;
+                }
+            }
         }
 
         private void CleanupAllViews()

@@ -116,8 +116,15 @@ namespace ClikerSlash.Battle
         private void ApplyOffset(float offsetY)
         {
             _lastAppliedOffsetY = offsetY;
-            foreach (var rendererState in _rendererStates)
+            for (var index = _rendererStates.Count - 1; index >= 0; index--)
             {
+                var rendererState = _rendererStates[index];
+                if (rendererState.Renderer == null)
+                {
+                    _rendererStates.RemoveAt(index);
+                    continue;
+                }
+
                 // 이미 다른 property block이 붙어 있어도 UV 오프셋 값만 덮어쓰도록 기존 블록을 읽어옵니다.
                 rendererState.Renderer.GetPropertyBlock(_propertyBlock);
                 var baseTextureSt = rendererState.BaseTextureSt;
@@ -138,8 +145,15 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            foreach (var rendererState in _rendererStates)
+            for (var index = _rendererStates.Count - 1; index >= 0; index--)
             {
+                var rendererState = _rendererStates[index];
+                if (rendererState.Renderer == null)
+                {
+                    _rendererStates.RemoveAt(index);
+                    continue;
+                }
+
                 rendererState.Renderer.GetPropertyBlock(_propertyBlock);
                 _propertyBlock.SetVector(_cachedTextureStPropertyId, rendererState.BaseTextureSt);
                 rendererState.Renderer.SetPropertyBlock(_propertyBlock);
