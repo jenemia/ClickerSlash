@@ -1,3 +1,4 @@
+using Unity.Mathematics;
 using Unity.Entities;
 
 namespace ClikerSlash.Battle
@@ -25,8 +26,7 @@ namespace ClikerSlash.Battle
     public struct PlayerConfig : IComponentData
     {
         public int InitialLane;
-        public float Y;
-        public float Z;
+        public float3 WorldPosition;
     }
 
     /// <summary>

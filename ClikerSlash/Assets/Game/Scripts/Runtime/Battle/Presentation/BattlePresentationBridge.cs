@@ -23,6 +23,10 @@ namespace ClikerSlash.Battle
         [SerializeField] [Min(0.05f)] private float loadingDockTransitionDuration = PrototypeSessionRuntime.DefaultLoadingDockTransitionDurationSeconds;
         [SerializeField] [Min(0)] private int standbyCameraPriority = 10;
         [SerializeField] [Min(1)] private int liveCameraPriority = 20;
+        [SerializeField] private Vector3 laneCargoGlobalOffset;
+        [SerializeField] private Vector3 laneStandardCargoOffset;
+        [SerializeField] private Vector3 laneFragileCargoOffset;
+        [SerializeField] private Vector3 laneHeavyCargoOffset;
 
         private World _cachedWorld;
         private EntityQuery _playerQuery;
@@ -247,6 +251,19 @@ namespace ClikerSlash.Battle
             return null;
         }
 
+        /// <summary>
+        /// 레인 물류 뷰의 높이와 피벗 차이를 맞추기 위한 종류별 시각 보정값을 반환합니다.
+        /// </summary>
+        public Vector3 GetLaneCargoOffset(LoadingDockCargoKind kind)
+        {
+            return laneCargoGlobalOffset + (kind switch
+            {
+                LoadingDockCargoKind.Fragile => laneFragileCargoOffset,
+                LoadingDockCargoKind.Heavy => laneHeavyCargoOffset,
+                _ => laneStandardCargoOffset
+            });
+        }
+
         private void SyncCargo(EntityManager entityManager)
         {
             if (cargoVisualPrefabs == null || !cargoVisualPrefabs.IsComplete)
@@ -276,7 +293,9 @@ namespace ClikerSlash.Battle
                     _cargoInstances[cargoEntity] = cargoView;
                 }
 
-                cargoView.transform.position = transforms[i].Position;
+                var visualPosition = (Vector3)transforms[i].Position;
+                visualPosition.y = 0f;
+                cargoView.transform.position = visualPosition + GetLaneCargoOffset(kinds[i].Value);
             }
 
             if (_cargoInstances.Count == 0)

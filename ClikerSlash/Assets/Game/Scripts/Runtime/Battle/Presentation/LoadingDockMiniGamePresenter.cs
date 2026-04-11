@@ -117,7 +117,7 @@ namespace ClikerSlash.Battle
                         entry.EntryId,
                         entry.Kind,
                         GetOrCreateCargoViewRoot(),
-                        ResolveSlotPosition(entry.SlotIndex));
+                        ResolveSlotPosition(entry.SlotIndex, entry.Kind));
                     if (cargoView == null)
                     {
                         continue;
@@ -126,9 +126,16 @@ namespace ClikerSlash.Battle
                     _cargoViews[entry.EntryId] = cargoView;
                 }
 
+                var slotChanged = !_slotByEntryId.TryGetValue(entry.EntryId, out var previousSlotIndex) ||
+                                  previousSlotIndex != entry.SlotIndex;
                 _slotByEntryId[entry.EntryId] = entry.SlotIndex;
                 cargoView.Bind(entry.EntryId, entry.Kind);
-                cargoView.transform.position = ResolveSlotPosition(entry.SlotIndex);
+                if (slotChanged)
+                {
+                    // 활성 슬롯 물류는 대기 중 정지 상태이므로 슬롯이 바뀔 때만 목표 위치를 다시 맞춥니다.
+                    cargoView.transform.position = ResolveSlotPosition(entry.SlotIndex, entry.Kind);
+                }
+
                 cargoView.gameObject.name = $"LoadingDockCargo_{entry.EntryId}";
             }
 
@@ -222,26 +229,30 @@ namespace ClikerSlash.Battle
             TryDeliverCargoEntry(entryId);
         }
 
-        private Vector3 ResolveSlotPosition(int slotIndex)
+        /// <summary>
+        /// 슬롯 앵커와 종류별 보정값을 합쳐 벨트 위 최종 물류 배치 위치를 계산합니다.
+        /// </summary>
+        private Vector3 ResolveSlotPosition(int slotIndex, LoadingDockCargoKind kind)
         {
+            var cargoOffset = environment != null ? environment.GetCargoOffset(kind) : Vector3.zero;
             if (environment.cargoSlotAnchors != null &&
                 slotIndex >= 0 &&
                 slotIndex < environment.cargoSlotAnchors.Length &&
                 environment.cargoSlotAnchors[slotIndex] != null)
             {
-                return environment.cargoSlotAnchors[slotIndex].position;
+                return environment.cargoSlotAnchors[slotIndex].position + cargoOffset;
             }
 
             if (environment.cargoBayRoot == null)
             {
-                return transform.position;
+                return transform.position + cargoOffset;
             }
 
             var row = slotIndex / 3;
             var column = slotIndex % 3;
             var xOffset = (column - 1) * fallbackSlotSpacing;
             var zOffset = row * fallbackSlotSpacing;
-            return environment.cargoBayRoot.position + new Vector3(xOffset, 1.1f, zOffset);
+            return environment.cargoBayRoot.position + new Vector3(xOffset, 1.1f, zOffset) + cargoOffset;
         }
 
         private void ClearCargoViews()

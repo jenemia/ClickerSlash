@@ -122,7 +122,7 @@ namespace ClikerSlash.Battle
             state.EntityManager.AddComponentData(playerEntity, new MaxHandleWeight { Value = resolvedProgression.MaxHandleWeight });
             state.EntityManager.AddComponentData(playerEntity, new ComboState { Current = 0, Max = 0 });
             state.EntityManager.AddComponentData(playerEntity, LocalTransform.FromPositionRotationScale(
-                new float3(playerX, playerConfig.Y, playerConfig.Z),
+                new float3(playerX, playerConfig.WorldPosition.y, playerConfig.WorldPosition.z),
                 quaternion.identity,
                 1f));
             state.EntityManager.AddBuffer<LaneMoveCommandBufferElement>(playerEntity);
@@ -138,7 +138,7 @@ namespace ClikerSlash.Battle
                 });
                 state.EntityManager.AddComponentData(laneRobotEntity, new HandleState { BusyUntilTime = 0d });
                 state.EntityManager.AddComponentData(laneRobotEntity, LocalTransform.FromPositionRotationScale(
-                    new float3(0f, playerConfig.Y, (battleConfig.JudgmentLineZ + battleConfig.FailLineZ) * 0.5f),
+                    new float3(0f, playerConfig.WorldPosition.y, (battleConfig.JudgmentLineZ + battleConfig.FailLineZ) * 0.5f),
                     quaternion.identity,
                     0.95f));
             }

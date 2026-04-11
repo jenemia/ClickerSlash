@@ -1,3 +1,4 @@
+using Unity.Mathematics;
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
@@ -88,8 +89,7 @@ namespace ClikerSlash.Battle
             entityManager.SetComponentData(playerEntity, new PlayerConfig
             {
                 InitialLane = playerAuthoring.InitialLane,
-                Y = playerAuthoring.Y,
-                Z = playerAuthoring.Z
+                WorldPosition = (float3)playerAuthoring.transform.position
             });
 
             var cargoEntity = entityManager.CreateEntity(typeof(CargoConfig));

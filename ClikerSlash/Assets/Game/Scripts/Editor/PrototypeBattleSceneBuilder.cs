@@ -316,8 +316,10 @@ namespace ClikerSlash.Editor
             var playerRoot = new GameObject("WorkerSpawn");
             var playerAuthoring = playerRoot.AddComponent<PlayerAuthoring>();
             playerAuthoring.InitialLane = 1;
-            playerAuthoring.Y = 0.6f;
-            playerAuthoring.Z = battleView.PlayerZ;
+            playerRoot.transform.position = new Vector3(
+                battleView.LaneWorldXs[playerAuthoring.InitialLane],
+                0.6f,
+                battleView.PlayerZ);
 
             var cargoRoot = new GameObject("CargoPrototype");
             var cargoAuthoring = cargoRoot.AddComponent<CargoAuthoring>();
@@ -344,6 +346,7 @@ namespace ClikerSlash.Editor
             var presentationRoot = new GameObject("BattlePresentationRoot");
             var bridge = presentationRoot.AddComponent<BattlePresentationBridge>();
             var miniGamePresenter = presentationRoot.AddComponent<LoadingDockMiniGamePresenter>();
+            var conveyorPresenter = presentationRoot.AddComponent<LoadingDockConveyorPresenter>();
 
             laneVirtualCamera = CreateVirtualCamera(
                 "LaneVirtualCamera",
@@ -368,8 +371,10 @@ namespace ClikerSlash.Editor
                 loadingDockVirtualCamera);
             bridge.BindVisualPrefabs(workerPrefab, cargoVisualPrefabs);
             miniGamePresenter.BindSceneReferences(mainCamera, loadingDockEnvironment, cargoVisualPrefabs);
+            conveyorPresenter.BindSceneReferences(loadingDockEnvironment);
             EditorUtility.SetDirty(bridge);
             EditorUtility.SetDirty(miniGamePresenter);
+            EditorUtility.SetDirty(conveyorPresenter);
         }
 
         private static CinemachineCamera CreateVirtualCamera(

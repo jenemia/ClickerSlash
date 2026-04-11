@@ -51,7 +51,7 @@ namespace ClikerSlash.Battle
                     moveState.ValueRW.TargetLane = laneIndex.ValueRO.Value;
                     moveState.ValueRW.Progress = 0f;
                     moveState.ValueRW.IsMoving = 0;
-                    transform.ValueRW.Position = new float3(currentLaneX, playerConfig.Y, playerConfig.Z);
+                    transform.ValueRW.Position = new float3(currentLaneX, playerConfig.WorldPosition.y, playerConfig.WorldPosition.z);
                     continue;
                 }
 
@@ -60,8 +60,8 @@ namespace ClikerSlash.Battle
                     // 정지 프레임에도 기준 레인 위치에 다시 맞춰 두어 드리프트를 막습니다.
                     transform.ValueRW.Position = new float3(
                         BattleLaneUtility.GetLaneX(laneXs, laneIndex.ValueRO.Value),
-                        playerConfig.Y,
-                        playerConfig.Z);
+                        playerConfig.WorldPosition.y,
+                        playerConfig.WorldPosition.z);
                     continue;
                 }
 
@@ -73,8 +73,8 @@ namespace ClikerSlash.Battle
                 // 선형 보간을 사용해 고정 이동 시간을 유지하면서도 읽기 쉬운 레인 이동을 만듭니다.
                 transform.ValueRW.Position = new float3(
                     math.lerp(startX, targetX, progress),
-                    playerConfig.Y,
-                    playerConfig.Z);
+                    playerConfig.WorldPosition.y,
+                    playerConfig.WorldPosition.z);
 
                 if (progress < 1f)
                 {
@@ -85,7 +85,7 @@ namespace ClikerSlash.Battle
                 laneIndex.ValueRW.Value = moveState.ValueRO.TargetLane;
                 moveState.ValueRW.Progress = 0f;
                 moveState.ValueRW.IsMoving = 0;
-                transform.ValueRW.Position = new float3(targetX, playerConfig.Y, playerConfig.Z);
+                transform.ValueRW.Position = new float3(targetX, playerConfig.WorldPosition.y, playerConfig.WorldPosition.z);
             }
         }
     }

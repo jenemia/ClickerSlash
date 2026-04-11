@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections;
 using ClikerSlash.Battle;
 using NUnit.Framework;
@@ -9,6 +10,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using UnityEngine.TestTools.Utils;
 using UnityEngine.UI;
 
 namespace ClikerSlash.Tests.PlayMode
@@ -849,6 +851,7 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockEnvironment.truckDropZone, Is.Not.Null);
             Assert.That(loadingDockEnvironment.dockRobotAnchor, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.GetConveyorBeltRenderers(), Is.Not.Empty);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors.Length, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
             foreach (var slotAnchor in loadingDockEnvironment.cargoSlotAnchors)
             {
@@ -1043,6 +1046,131 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(activeEntries.Length, Is.EqualTo(3));
             Assert.That(cargoViewRoot, Is.Not.Null);
             Assert.That(cargoViewRoot.childCount, Is.EqualTo(3));
+        }
+
+        /// <summary>
+        /// 종류별 물류는 슬롯 앵커 위치에 공통/개별 offset을 더한 좌표로 정지 배치되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockPresenterAppliesCargoOffsetsPerKind()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            var environment = Object.FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            Assert.That(presenter, Is.Not.Null);
+            Assert.That(environment, Is.Not.Null);
+
+            environment.globalCargoOffset = new Vector3(0.1f, 0.2f, 0.3f);
+            environment.standardCargoOffset = new Vector3(0.01f, 0.02f, 0.03f);
+            environment.fragileCargoOffset = new Vector3(0.04f, 0.05f, 0.06f);
+            environment.heavyCargoOffset = new Vector3(0.07f, 0.08f, 0.09f);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Fragile);
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Heavy);
+            yield return null;
+            yield return null;
+
+            var cargoViewRoot = presenter.transform.Find("LoadingDockCargoViewRoot");
+            var activeEntries = PrototypeSessionRuntime.GetLoadingDockActiveCargoEntries();
+            Assert.That(cargoViewRoot, Is.Not.Null);
+            Assert.That(cargoViewRoot.childCount, Is.EqualTo(3));
+            Assert.That(activeEntries.Length, Is.EqualTo(3));
+
+            foreach (Transform cargoViewTransform in cargoViewRoot)
+            {
+                var cargoView = cargoViewTransform.GetComponent<LoadingDockCargoView>();
+                Assert.That(cargoView, Is.Not.Null);
+
+                var entry = FindActiveEntry(activeEntries, cargoView.EntryId);
+                var slotAnchor = environment.cargoSlotAnchors[entry.SlotIndex];
+                var expectedPosition = slotAnchor.position + environment.GetCargoOffset(entry.Kind);
+                Assert.That(cargoViewTransform.position, Is.EqualTo(expectedPosition).Using(Vector3EqualityComparer.Instance));
+            }
+        }
+
+        /// <summary>
+        /// 대기 중인 활성 슬롯 물류는 정지 상태를 유지하고 컨베이어 UV만 시간에 따라 변해야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LoadingDockConveyorPresenterScrollsUvsWhileQueuedCargoStaysStill()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            PrototypeSessionRuntime.EnqueueLoadingDockCargo(LoadingDockCargoKind.Standard);
+            yield return null;
+            yield return null;
+
+            var presenter = Object.FindFirstObjectByType<LoadingDockMiniGamePresenter>();
+            var conveyorPresenter = Object.FindFirstObjectByType<LoadingDockConveyorPresenter>();
+            var environment = Object.FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            Assert.That(presenter, Is.Not.Null);
+            Assert.That(conveyorPresenter, Is.Not.Null);
+            Assert.That(environment, Is.Not.Null);
+
+            environment.conveyorUvSpeedY = 0.485f;
+            var cargoViewRoot = presenter.transform.Find("LoadingDockCargoViewRoot");
+            Assert.That(cargoViewRoot, Is.Not.Null);
+            Assert.That(cargoViewRoot.childCount, Is.GreaterThan(0));
+
+            var cargoTransform = cargoViewRoot.GetChild(0);
+            var initialCargoPosition = cargoTransform.position;
+            var beltRenderers = environment.GetConveyorBeltRenderers();
+            Assert.That(beltRenderers, Is.Not.Empty);
+            var beltRenderer = beltRenderers[0];
+            var propertyBlock = new MaterialPropertyBlock();
+            beltRenderer.GetPropertyBlock(propertyBlock);
+            var textureStPropertyId = Shader.PropertyToID($"{environment.conveyorTexturePropertyName}_ST");
+            var initialTextureSt = propertyBlock.GetVector(textureStPropertyId);
+
+            yield return null;
+            yield return null;
+            yield return null;
+
+            beltRenderer.GetPropertyBlock(propertyBlock);
+            var updatedTextureSt = propertyBlock.GetVector(textureStPropertyId);
+
+            Assert.That(cargoTransform.position, Is.EqualTo(initialCargoPosition).Using(Vector3EqualityComparer.Instance));
+            Assert.That(updatedTextureSt.y, Is.Not.EqualTo(initialTextureSt.y));
+            Assert.That(conveyorPresenter.LastAppliedOffsetY, Is.Not.NaN);
+        }
+
+        /// <summary>
+        /// 레인 물류 뷰의 Y 높이는 ECS 기본값이 아니라 브리지 offset 설정만으로 결정되어야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LaneCargoViewAppliesBridgeOffset()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            FreezeRandomSpawns(entityManager);
+
+            var bridge = Object.FindFirstObjectByType<BattlePresentationBridge>();
+            Assert.That(bridge, Is.Not.Null);
+
+            var battleConfig = entityManager.CreateEntityQuery(typeof(BattleConfig)).GetSingleton<BattleConfig>();
+            SpawnCargo(entityManager, 1, battleConfig.JudgmentLineZ + 1.25f, 6, 50, 20, 0f, LoadingDockCargoKind.Heavy);
+            yield return null;
+            yield return null;
+
+            var laneCargoView = FindLaneCargoView();
+            Assert.That(laneCargoView, Is.Not.Null);
+            var laneCargoRenderer = laneCargoView.GetComponent<LoadingDockCargoView>();
+            Assert.That(laneCargoRenderer, Is.Not.Null);
+
+            var cargoEntity = entityManager.CreateEntityQuery(typeof(CargoTag), typeof(CargoKind), typeof(LocalTransform)).GetSingletonEntity();
+            var cargoTransform = entityManager.GetComponentData<LocalTransform>(cargoEntity);
+            var cargoKind = entityManager.GetComponentData<CargoKind>(cargoEntity);
+            var expectedPosition = (Vector3)cargoTransform.Position;
+            expectedPosition.y = 0f;
+            expectedPosition += bridge.GetLaneCargoOffset(cargoKind.Value);
+
+            Assert.That(laneCargoView.transform.position, Is.EqualTo(expectedPosition).Using(Vector3EqualityComparer.Instance));
         }
 
         /// <summary>
@@ -1255,6 +1383,22 @@ namespace ClikerSlash.Tests.PlayMode
             }
 
             return null;
+        }
+
+        private static LoadingDockActiveCargoSlotSnapshot FindActiveEntry(
+            IReadOnlyList<LoadingDockActiveCargoSlotSnapshot> activeEntries,
+            int entryId)
+        {
+            for (var index = 0; index < activeEntries.Count; index += 1)
+            {
+                if (activeEntries[index].EntryId == entryId)
+                {
+                    return activeEntries[index];
+                }
+            }
+
+            Assert.Fail($"Could not find active cargo entry {entryId}.");
+            return default;
         }
 
         private static void SeedRuntimeCurrency(int amount)
