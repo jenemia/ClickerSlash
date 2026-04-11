@@ -38,7 +38,12 @@ namespace ClikerSlash.Battle
             var laneXs = state.EntityManager.GetBuffer<LaneWorldXElement>(laneEntity);
             var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
             var activeLaneCount = MetaProgressionBootstrapBridge.ResolveActiveLaneCount(resolvedProgression, laneXs.Length);
-            var initialLane = BattleLaneUtility.ClampLane(playerConfig.InitialLane, activeLaneCount);
+            var activeLaneStartIndex = BattleLaneUtility.ResolveCenteredActiveLaneStartIndex(activeLaneCount, laneXs.Length);
+            var initialLane = BattleLaneUtility.ClampLaneToActiveRange(
+                playerConfig.InitialLane,
+                activeLaneStartIndex,
+                activeLaneCount,
+                laneXs.Length);
             var playerX = BattleLaneUtility.GetLaneX(laneXs, initialLane);
             var resolvedWorkDuration = PrototypeSessionRuntime.ResolveWorkDuration(
                 battleConfig.BaseWorkDurationSeconds,
@@ -79,6 +84,7 @@ namespace ClikerSlash.Battle
             });
             state.EntityManager.AddComponentData(configEntity, new SessionRuleState
             {
+                ActiveLaneStartIndex = activeLaneStartIndex,
                 ActiveLaneCount = activeLaneCount,
                 PreviewCargoCount = resolvedProgression.PreviewCargoCount
             });

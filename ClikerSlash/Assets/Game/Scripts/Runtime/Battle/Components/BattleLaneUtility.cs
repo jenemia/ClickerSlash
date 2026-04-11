@@ -25,5 +25,43 @@ namespace ClikerSlash.Battle
             var clampedLane = ClampLane(lane, laneXs.Length);
             return laneXs[clampedLane].Value;
         }
+
+        /// <summary>
+        /// 활성 레인을 중앙 정렬 연속 구간으로 배치할 때 시작 인덱스를 계산합니다.
+        /// </summary>
+        public static int ResolveCenteredActiveLaneStartIndex(int activeLaneCount, int physicalLaneCount)
+        {
+            var resolvedPhysicalLaneCount = math.max(1, physicalLaneCount);
+            var resolvedActiveLaneCount = math.clamp(activeLaneCount, 1, resolvedPhysicalLaneCount);
+            return math.max(0, (resolvedPhysicalLaneCount - resolvedActiveLaneCount) / 2);
+        }
+
+        /// <summary>
+        /// 활성 구간의 시작/개수 기준으로 요청된 레인을 허용 범위 안으로 보정합니다.
+        /// </summary>
+        public static int ClampLaneToActiveRange(int lane, int activeLaneStartIndex, int activeLaneCount, int physicalLaneCount)
+        {
+            var resolvedPhysicalLaneCount = math.max(1, physicalLaneCount);
+            var resolvedActiveLaneCount = math.clamp(activeLaneCount, 1, resolvedPhysicalLaneCount);
+            var resolvedStartIndex = math.clamp(
+                activeLaneStartIndex,
+                0,
+                resolvedPhysicalLaneCount - resolvedActiveLaneCount);
+            var resolvedEndIndex = resolvedStartIndex + resolvedActiveLaneCount - 1;
+            return math.clamp(lane, resolvedStartIndex, resolvedEndIndex);
+        }
+
+        /// <summary>
+        /// 지정한 물리 레인이 현재 활성 구간 안에 포함되는지 반환합니다.
+        /// </summary>
+        public static bool IsLaneActive(int lane, int activeLaneStartIndex, int activeLaneCount)
+        {
+            if (activeLaneCount <= 0)
+            {
+                return false;
+            }
+
+            return lane >= activeLaneStartIndex && lane < activeLaneStartIndex + activeLaneCount;
+        }
     }
 }

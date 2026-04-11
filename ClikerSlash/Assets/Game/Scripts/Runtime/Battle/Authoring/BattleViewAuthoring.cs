@@ -9,8 +9,8 @@ namespace ClikerSlash.Battle
         public Vector3 CameraPosition = new(0f, 10.6f, -16.8f);
         public Vector3 CameraRotation = new(31f, 0f, 0f);
         [Min(10f)] public float CameraFieldOfView = 34f;
-        public List<float> LaneWorldXs = new() { -6f, -2f, 2f, 6f };
-        [Min(0.1f)] public float LaneWidth = 3f;
+        public List<float> LaneWorldXs = new() { -6.6666665f, -4f, -1.3333334f, 1.3333334f, 4f, 6.6666665f };
+        [Min(0.1f)] public float LaneWidth = 1.6666666f;
         [Min(0.1f)] public float LaneLength = 15f;
         public float LaneCenterZ = 3f;
         [Min(0.1f)] public float LineVisualWidth = 16f;

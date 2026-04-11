@@ -18,6 +18,7 @@ namespace ClikerSlash.Battle
     /// </summary>
     public struct SessionRuleState : IComponentData
     {
+        public int ActiveLaneStartIndex;
         public int ActiveLaneCount;
         public int PreviewCargoCount;
     }

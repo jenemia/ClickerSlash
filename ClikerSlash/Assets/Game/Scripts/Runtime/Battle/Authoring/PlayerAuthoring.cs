@@ -9,7 +9,7 @@ namespace ClikerSlash.Battle
     /// </summary>
     public sealed class PlayerAuthoring : MonoBehaviour
     {
-        [Range(0, 3)] public int InitialLane = 1;
+        [Range(0, 5)] public int InitialLane = 2;
     }
 
     /// <summary>

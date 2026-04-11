@@ -14,7 +14,7 @@ namespace ClikerSlash.Battle
         [Min(1)] public int Reward = 60;
         [Min(1)] public int Penalty = 35;
         public float Y = 0.6f;
-        [Min(0.1f)] public float MoveSpeed = 2.4f;
+        [Min(0.1f)] public float MoveSpeed = 1.92f;
     }
 
     /// <summary>

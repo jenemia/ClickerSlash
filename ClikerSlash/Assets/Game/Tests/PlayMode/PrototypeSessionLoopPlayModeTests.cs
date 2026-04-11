@@ -80,10 +80,16 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(animator.GetFloat("Speed"), Is.EqualTo(0f).Within(0.05f));
 
             var entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var sessionRules = entityManager.CreateEntityQuery(typeof(SessionRuleState)).GetSingleton<SessionRuleState>();
             var playerEntity = entityManager.CreateEntityQuery(typeof(PlayerTag), typeof(LaneMoveState)).GetSingletonEntity();
+            var laneIndex = entityManager.GetComponentData<LaneIndex>(playerEntity);
+            Assert.That(sessionRules.ActiveLaneStartIndex, Is.EqualTo(2));
+            Assert.That(sessionRules.ActiveLaneCount, Is.EqualTo(2));
+            Assert.That(laneIndex.Value, Is.EqualTo(2));
+
             var moveState = entityManager.GetComponentData<LaneMoveState>(playerEntity);
-            moveState.StartLane = 1;
-            moveState.TargetLane = 2;
+            moveState.StartLane = 2;
+            moveState.TargetLane = 3;
             moveState.Progress = 0f;
             moveState.IsMoving = 1;
             entityManager.SetComponentData(playerEntity, moveState);
@@ -279,6 +285,7 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(PrototypeSessionRuntime.HealthLevel, Is.EqualTo(2));
             Assert.That(PrototypeSessionRuntime.GetCurrencySnapshot().currentBalance, Is.EqualTo(0));
             Assert.That(PrototypeSessionRuntime.GetCurrencySnapshot().totalSkillSpent, Is.EqualTo(1));
+            Assert.That(sessionRules.ActiveLaneStartIndex, Is.EqualTo(2));
             Assert.That(sessionRules.ActiveLaneCount, Is.EqualTo(catalog.workerBaseStats.startingUnlockedLaneCount));
         }
 
@@ -1172,7 +1179,7 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(conveyorPresenter, Is.Not.Null);
             Assert.That(environment, Is.Not.Null);
 
-            environment.conveyorUvSpeedY = 0.485f;
+            environment.conveyorUvSpeedY = 0.388f;
             var cargoViewRoot = presenter.transform.Find("LoadingDockCargoViewRoot");
             Assert.That(cargoViewRoot, Is.Not.Null);
             Assert.That(cargoViewRoot.childCount, Is.GreaterThan(0));
@@ -1181,21 +1188,29 @@ namespace ClikerSlash.Tests.PlayMode
             var initialCargoPosition = cargoTransform.position;
             var beltRenderers = environment.GetConveyorBeltRenderers();
             Assert.That(beltRenderers, Is.Not.Empty);
-            var beltRenderer = beltRenderers[0];
+            var activeBeltRenderer = FindRendererForLane(beltRenderers, 3);
+            var inactiveBeltRenderer = FindRendererForLane(beltRenderers, 1);
+            Assert.That(activeBeltRenderer, Is.Not.Null);
+            Assert.That(inactiveBeltRenderer, Is.Not.Null);
             var propertyBlock = new MaterialPropertyBlock();
-            beltRenderer.GetPropertyBlock(propertyBlock);
             var textureStPropertyId = Shader.PropertyToID($"{environment.conveyorTexturePropertyName}_ST");
-            var initialTextureSt = propertyBlock.GetVector(textureStPropertyId);
+            activeBeltRenderer.GetPropertyBlock(propertyBlock);
+            var initialActiveTextureSt = propertyBlock.GetVector(textureStPropertyId);
+            inactiveBeltRenderer.GetPropertyBlock(propertyBlock);
+            var initialInactiveTextureSt = propertyBlock.GetVector(textureStPropertyId);
 
             yield return null;
             yield return null;
             yield return null;
 
-            beltRenderer.GetPropertyBlock(propertyBlock);
-            var updatedTextureSt = propertyBlock.GetVector(textureStPropertyId);
+            activeBeltRenderer.GetPropertyBlock(propertyBlock);
+            var updatedActiveTextureSt = propertyBlock.GetVector(textureStPropertyId);
+            inactiveBeltRenderer.GetPropertyBlock(propertyBlock);
+            var updatedInactiveTextureSt = propertyBlock.GetVector(textureStPropertyId);
 
             Assert.That(cargoTransform.position, Is.EqualTo(initialCargoPosition).Using(Vector3EqualityComparer.Instance));
-            Assert.That(updatedTextureSt.y, Is.Not.EqualTo(initialTextureSt.y));
+            Assert.That(updatedActiveTextureSt.y, Is.Not.EqualTo(initialActiveTextureSt.y));
+            Assert.That(updatedInactiveTextureSt, Is.EqualTo(initialInactiveTextureSt));
             Assert.That(conveyorPresenter.LastAppliedOffsetY, Is.Not.NaN);
         }
 
@@ -1641,6 +1656,27 @@ namespace ClikerSlash.Tests.PlayMode
                     string.Equals(rawImage.name, objectName, System.StringComparison.Ordinal))
                 {
                     return rawImage;
+                }
+            }
+
+            return null;
+        }
+
+        private static Renderer FindRendererForLane(IEnumerable<Renderer> renderers, int laneNumber)
+        {
+            foreach (var renderer in renderers)
+            {
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                for (var current = renderer.transform; current != null; current = current.parent)
+                {
+                    if (current.name == $"Lane_{laneNumber}")
+                    {
+                        return renderer;
+                    }
                 }
             }
 

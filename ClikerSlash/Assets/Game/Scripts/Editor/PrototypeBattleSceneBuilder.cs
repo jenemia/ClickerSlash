@@ -90,8 +90,8 @@ namespace ClikerSlash.Editor
             battleView.CameraPosition = new Vector3(0f, 10.6f, -16.8f);
             battleView.CameraRotation = new Vector3(31f, 0f, 0f);
             battleView.CameraFieldOfView = 34f;
-            battleView.LaneWorldXs = new List<float> { -6f, -2f, 2f, 6f };
-            battleView.LaneWidth = 3f;
+            battleView.LaneWorldXs = new List<float> { -6.6666665f, -4f, -1.3333334f, 1.3333334f, 4f, 6.6666665f };
+            battleView.LaneWidth = 1.6666666f;
             battleView.LaneLength = 15f;
             battleView.LaneCenterZ = 3f;
             battleView.LineVisualWidth = 16f;
@@ -294,6 +294,7 @@ namespace ClikerSlash.Editor
             dockRobotAnchor.transform.SetParent(root.transform, false);
             dockRobotAnchor.transform.localPosition = new Vector3(3.2f, 1.05f, -0.8f);
             authoring.dockRobotAnchor = dockRobotAnchor.transform;
+            authoring.conveyorUvSpeedY = 0.388f;
 
             EditorUtility.SetDirty(authoring);
             return authoring;
@@ -308,7 +309,7 @@ namespace ClikerSlash.Editor
             battleConfig.HealthDurationBonusSeconds = PrototypeSessionRuntime.DefaultHealthDurationBonusSeconds;
             battleConfig.PlayerMoveDuration = 0.22f;
             battleConfig.HandleDurationSeconds = 0.4f;
-            battleConfig.SpawnInterval = 0.9f;
+            battleConfig.SpawnInterval = 1.08f;
             battleConfig.CargoSpawnZ = battleView.CargoSpawnZ;
             battleConfig.JudgmentLineZ = battleView.JudgmentLineZ;
             battleConfig.FailLineZ = battleView.FailLineZ;
@@ -317,7 +318,7 @@ namespace ClikerSlash.Editor
 
             var playerRoot = new GameObject("WorkerSpawn");
             var playerAuthoring = playerRoot.AddComponent<PlayerAuthoring>();
-            playerAuthoring.InitialLane = 1;
+            playerAuthoring.InitialLane = 2;
             playerRoot.transform.position = new Vector3(
                 battleView.LaneWorldXs[playerAuthoring.InitialLane],
                 0.6f,
@@ -331,7 +332,7 @@ namespace ClikerSlash.Editor
             cargoAuthoring.Reward = 60;
             cargoAuthoring.Penalty = 35;
             cargoAuthoring.Y = 0.6f;
-            cargoAuthoring.MoveSpeed = 2.4f;
+            cargoAuthoring.MoveSpeed = 1.92f;
 
             laneRoot.transform.position = Vector3.zero;
         }
@@ -437,7 +438,7 @@ namespace ClikerSlash.Editor
 
             var laneText = CreateHudText("LaneText", hudRoot.transform, font, 30, TextAnchor.UpperCenter);
             SetRect(laneText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -26f), new Vector2(320f, 110f));
-            laneText.text = "Lane 2 / 4\nMax Weight 10";
+            laneText.text = "Lane 3 / 6 (Open 3-4)\nMax Weight 10\nRobot OFF";
 
             var controlsText = CreateHudText("ControlsText", hudRoot.transform, font, 24, TextAnchor.LowerCenter);
             SetRect(controlsText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 22f), new Vector2(500f, 60f));

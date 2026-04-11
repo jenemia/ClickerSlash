@@ -9,7 +9,7 @@ namespace ClikerSlash.Battle
     /// </summary>
     public sealed class LaneLayoutAuthoring : MonoBehaviour
     {
-        public List<float> LaneWorldXs = new() { -4.5f, -1.5f, 1.5f, 4.5f };
+        public List<float> LaneWorldXs = new() { -6.6666665f, -4f, -1.3333334f, 1.3333334f, 4f, 6.6666665f };
     }
 
     /// <summary>

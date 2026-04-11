@@ -15,7 +15,7 @@ namespace ClikerSlash.Battle
         [Min(0.05f)] public float PlayerMoveDuration = 0.22f;
         [FormerlySerializedAs("AttackInterval")]
         [Min(0.05f)] public float HandleDurationSeconds = 0.4f;
-        [Min(0.05f)] public float SpawnInterval = 0.9f;
+        [Min(0.05f)] public float SpawnInterval = 1.08f;
         [FormerlySerializedAs("EnemySpawnZ")]
         public float CargoSpawnZ = 8.5f;
         [Min(0.05f)] public float HandleWindowHalfDepth = 0.45f;

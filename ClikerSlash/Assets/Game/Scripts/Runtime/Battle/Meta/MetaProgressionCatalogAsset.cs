@@ -284,12 +284,13 @@ namespace ClikerSlash.Battle
         menuName = "ClikerSlash/Meta/Meta Progression Catalog")]
     public sealed class MetaProgressionCatalogAsset : ScriptableObject
     {
-        public const int DefaultSchemaVersion = 4;
+        public const int DefaultSchemaVersion = 5;
         public const string DefaultResourcePath = "MetaProgression/DefaultMetaProgressionCatalog";
         public const string StarterVitalityNodeId = "vitality.basic_stamina_training";
         public const string LaneExpansionNodeIdTier1 = "management.lane_expansion_i";
         public const string LaneExpansionNodeIdTier2 = "management.lane_expansion_ii";
         public const string LaneExpansionNodeIdTier3 = "management.lane_expansion_iii";
+        public const string LaneExpansionNodeIdTier4 = "management.lane_expansion_iv";
         public const string LoadingDockUnlockNodeId = "management.loading_dock_unlock";
         public const string LaneRobotUnlockNodeId = "robot.lane_robot_unlock";
         public const string DockRobotUnlockNodeId = "robot.dock_robot_unlock";
@@ -828,6 +829,15 @@ namespace ClikerSlash.Battle
                     4,
                     new List<string> { LaneExpansionNodeIdTier2 },
                     OverrideIntEffect(SkillEffectType.UnlockedLaneCountOverride, 5)),
+                CreateNode(
+                    LaneExpansionNodeIdTier4,
+                    SkillBranchId.Management,
+                    "라인 증설 IV",
+                    5,
+                    1,
+                    5,
+                    new List<string> { LaneExpansionNodeIdTier3 },
+                    OverrideIntEffect(SkillEffectType.UnlockedLaneCountOverride, 6)),
                 CreateNode(
                     "automation.weight_scanner",
                     SkillBranchId.Automation,

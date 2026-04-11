@@ -31,12 +31,16 @@ namespace ClikerSlash.Battle
 
             var isMovementLocked = PrototypeSessionRuntime.IsLaneMovementLocked();
 
-            var laneCount = SystemAPI.GetSingleton<LaneLayout>().LaneCount;
+            var laneLayout = SystemAPI.GetSingleton<LaneLayout>();
+            var activeLaneStartIndex = 0;
+            var activeLaneCount = laneLayout.LaneCount;
             if (SystemAPI.HasSingleton<SessionRuleState>())
             {
-                laneCount = Unity.Mathematics.math.min(
-                    laneCount,
-                    Unity.Mathematics.math.max(1, SystemAPI.GetSingleton<SessionRuleState>().ActiveLaneCount));
+                var sessionRules = SystemAPI.GetSingleton<SessionRuleState>();
+                activeLaneStartIndex = sessionRules.ActiveLaneStartIndex;
+                activeLaneCount = Unity.Mathematics.math.min(
+                    laneLayout.LaneCount,
+                    Unity.Mathematics.math.max(1, sessionRules.ActiveLaneCount));
             }
 
             foreach (var (moveState, laneIndex, moveCommands) in SystemAPI
@@ -58,7 +62,11 @@ namespace ClikerSlash.Battle
                 var nextCommand = moveCommands[0];
                 moveCommands.RemoveAt(0);
 
-                var targetLane = BattleLaneUtility.ClampLane(laneIndex.ValueRO.Value + nextCommand.Direction, laneCount);
+                var targetLane = BattleLaneUtility.ClampLaneToActiveRange(
+                    laneIndex.ValueRO.Value + nextCommand.Direction,
+                    activeLaneStartIndex,
+                    activeLaneCount,
+                    laneLayout.LaneCount);
                 if (targetLane == laneIndex.ValueRO.Value)
                 {
                     // 레인 범위를 벗어나는 명령은 소비만 하고 무시합니다.

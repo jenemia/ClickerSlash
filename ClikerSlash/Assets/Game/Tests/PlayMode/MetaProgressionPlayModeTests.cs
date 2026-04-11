@@ -19,7 +19,7 @@ namespace ClikerSlash.Tests.PlayMode
         {
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
-            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
+            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 6);
 
             Assert.That(snapshot.currency, Is.Not.Null);
             Assert.That(snapshot.currency.currentBalance, Is.Zero);
@@ -78,7 +78,7 @@ namespace ClikerSlash.Tests.PlayMode
             Assert.That(loadingDockNode.prerequisiteNodeIds, Does.Contain("management.performance_contract"));
 
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
-            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
+            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 6);
             var status = MetaProgressionCalculator.DescribeNode(snapshot, catalog, MetaProgressionCatalogAsset.LoadingDockUnlockNodeId);
 
             Assert.That(resolved.HasLoadingDockAccess, Is.True);
@@ -98,7 +98,7 @@ namespace ClikerSlash.Tests.PlayMode
             var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
             var snapshot = MetaProgressionCalculator.CreateDefaultSnapshot(catalog);
 
-            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
+            var resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 6);
             Assert.That(resolved.HasLaneRobotAccess, Is.True);
             Assert.That(resolved.HasDockRobotAccess, Is.True);
             Assert.That(resolved.RobotMaxHandleWeight, Is.EqualTo(ResolvedMetaProgression.BaseRobotMaxHandleWeight));
@@ -110,7 +110,7 @@ namespace ClikerSlash.Tests.PlayMode
             }
 
             Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.RobotPrecisionCalibrationNodeId), Is.True);
-            resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 5);
+            resolved = MetaProgressionCalculator.Resolve(snapshot, catalog, 6);
 
             Assert.That(resolved.RobotMaxHandleWeight, Is.EqualTo(16));
             Assert.That(resolved.RobotPrecisionTier, Is.EqualTo(1));
@@ -132,13 +132,16 @@ namespace ClikerSlash.Tests.PlayMode
             }
 
             Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LaneExpansionNodeIdTier1), Is.True);
-            Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 5).ActiveLaneCount, Is.EqualTo(3));
+            Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 6).ActiveLaneCount, Is.EqualTo(3));
 
             Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LaneExpansionNodeIdTier2), Is.True);
-            Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 5).ActiveLaneCount, Is.EqualTo(4));
+            Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 6).ActiveLaneCount, Is.EqualTo(4));
 
             Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LaneExpansionNodeIdTier3), Is.True);
-            Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 5).ActiveLaneCount, Is.EqualTo(5));
+            Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 6).ActiveLaneCount, Is.EqualTo(5));
+
+            Assert.That(MetaProgressionCalculator.TryUpgradeNode(snapshot, catalog, MetaProgressionCatalogAsset.LaneExpansionNodeIdTier4), Is.True);
+            Assert.That(MetaProgressionCalculator.Resolve(snapshot, catalog, 6).ActiveLaneCount, Is.EqualTo(6));
             yield return null;
         }
 

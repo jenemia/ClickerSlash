@@ -12,21 +12,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ddf9796b3bc4a1996d0df5220b55510, type: 3}
   m_Name: DefaultMetaProgressionCatalog
   m_EditorClassIdentifier: 
-  schemaVersion: 3
+  schemaVersion: 5
   workerBaseStats:
     baseSessionDurationSeconds: 20
     baseMaxHandleWeight: 10
-    baseLaneMoveDurationSeconds: 0.18
+    baseLaneMoveDurationSeconds: 1
     baseTimingWindowHalfDepth: 0.45
     baseRewardMultiplier: 1
     basePenaltyMultiplier: 1
-    startingUnlockedLaneCount: 3
+    startingUnlockedLaneCount: 2
   centerTree: {fileID: 11400000, guid: c74503235222b4c0181586f095975a27, type: 2}
   humanTree: {fileID: 11400000, guid: 299edab1765fb4c9fa5dcdc5259ecca9, type: 2}
   robotTree: {fileID: 11400000, guid: 4e189f013fdd04f1eb403979ed52938c, type: 2}
   startingProgression:
     unlockedNodeStates:
     - nodeId: management.loading_dock_unlock
+      level: 1
+      isUnlocked: 1
+    - nodeId: robot.lane_robot_unlock
+      level: 1
+      isUnlocked: 1
+    - nodeId: robot.dock_robot_unlock
       level: 1
       isUnlocked: 1
     selectedAutomationFlags: []

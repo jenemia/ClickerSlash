@@ -74,6 +74,9 @@ namespace ClikerSlash.Battle
             var maxHandleWeight = entityManager.GetComponentData<MaxHandleWeight>(playerEntity);
             var combo = entityManager.GetComponentData<ComboState>(playerEntity);
             var laneLayout = laneQuery.GetSingleton<LaneLayout>();
+            var activeLaneStartIndex = sessionRuleQuery.IsEmptyIgnoreFilter
+                ? 0
+                : entityManager.GetComponentData<SessionRuleState>(sessionRuleQuery.GetSingletonEntity()).ActiveLaneStartIndex;
             var activeLaneCount = sessionRuleQuery.IsEmptyIgnoreFilter
                 ? laneLayout.LaneCount
                 : entityManager.GetComponentData<SessionRuleState>(sessionRuleQuery.GetSingletonEntity()).ActiveLaneCount;
@@ -83,17 +86,19 @@ namespace ClikerSlash.Battle
                 : default;
             var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
                 MetaProgressionCatalogAsset.LoadDefaultCatalog(),
-                activeLaneCount);
+                laneLayout.LaneCount);
 
             HandleGlobalOverlayInput(loadingDockState, outcome);
             if (!PrototypeSessionRuntime.IsPauseMenuOpen)
             {
-                HandleLoadingDockInput(loadingDockState, activeLaneCount, outcome);
+                HandleLoadingDockInput(loadingDockState, laneLayout.LaneCount, outcome);
                 HandleLaneRobotPlacementInput(
                     entityManager,
                     laneRobotQuery,
                     laneRobotState,
+                    activeLaneStartIndex,
                     activeLaneCount,
+                    laneLayout.LaneCount,
                     loadingDockState,
                     outcome);
                 if (hasLaneRobot)
@@ -103,16 +108,16 @@ namespace ClikerSlash.Battle
             }
             loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
                 MetaProgressionCatalogAsset.LoadDefaultCatalog(),
-                activeLaneCount);
+                laneLayout.LaneCount);
             var loadingDockQueue = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
 
             infoText.text =
                 $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}\nDock {loadingDockQueue.ActiveSlotCount}/{loadingDockQueue.MaxActiveSlotCount} + {loadingDockQueue.BacklogCount}";
             laneText.text =
-                $"Lane {lane.Value + 1} / {activeLaneCount}\nMax Weight {maxHandleWeight.Value}\nRobot {(hasLaneRobot ? DescribeLaneRobotState(laneRobotState) : "OFF")}";
+                $"Lane {lane.Value + 1} / {laneLayout.LaneCount} (Open {DescribeLaneRange(activeLaneStartIndex, activeLaneCount)})\nMax Weight {maxHandleWeight.Value}\nRobot {(hasLaneRobot ? DescribeLaneRobotState(laneRobotState) : "OFF")}";
             if (controlsText != null)
             {
-                controlsText.text = BuildControlsText(loadingDockState, hasLaneRobot, laneRobotState, activeLaneCount);
+                controlsText.text = BuildControlsText(loadingDockState, hasLaneRobot, laneRobotState, activeLaneStartIndex, activeLaneCount);
             }
 
             if (outcome.HasOutcome == 0)
@@ -178,7 +183,9 @@ namespace ClikerSlash.Battle
             EntityManager entityManager,
             EntityQuery laneRobotQuery,
             LaneRobotState laneRobotState,
+            int activeLaneStartIndex,
             int activeLaneCount,
+            int physicalLaneCount,
             LoadingDockRuntimeState loadingDockState,
             BattleOutcomeState outcome)
         {
@@ -199,7 +206,8 @@ namespace ClikerSlash.Battle
             }
 
             var requestedLane = ResolveRequestedLaneIndex(keyboard);
-            if (requestedLane < 0 || requestedLane >= activeLaneCount)
+            if (!BattleLaneUtility.IsLaneActive(requestedLane, activeLaneStartIndex, activeLaneCount) ||
+                requestedLane >= physicalLaneCount)
             {
                 return;
             }
@@ -229,6 +237,7 @@ namespace ClikerSlash.Battle
             if (keyboard.digit3Key.wasPressedThisFrame) return 2;
             if (keyboard.digit4Key.wasPressedThisFrame) return 3;
             if (keyboard.digit5Key.wasPressedThisFrame) return 4;
+            if (keyboard.digit6Key.wasPressedThisFrame) return 5;
             return -1;
         }
 
@@ -236,11 +245,12 @@ namespace ClikerSlash.Battle
             LoadingDockRuntimeState loadingDockState,
             bool hasLaneRobot,
             LaneRobotState laneRobotState,
+            int activeLaneStartIndex,
             int activeLaneCount)
         {
             var movementControls = "Controls: A / D or Left / Right";
             var robotControls = hasLaneRobot && laneRobotState.IsAssigned == 0
-                ? $" / 1-{Mathf.Min(5, activeLaneCount)}: Place Robot"
+                ? $" / {DescribeLaneRange(activeLaneStartIndex, activeLaneCount)}: Place Robot"
                 : string.Empty;
             if (!loadingDockState.HasLoadingDockAccess)
             {
@@ -257,6 +267,16 @@ namespace ClikerSlash.Battle
             return laneRobotState.IsAssigned == 0
                 ? "UNSET"
                 : $"Lane {laneRobotState.AssignedLane + 1}";
+        }
+
+        private static string DescribeLaneRange(int activeLaneStartIndex, int activeLaneCount)
+        {
+            if (activeLaneCount <= 1)
+            {
+                return $"{activeLaneStartIndex + 1}";
+            }
+
+            return $"{activeLaneStartIndex + 1}-{activeLaneStartIndex + activeLaneCount}";
         }
 
         private void OnGUI()

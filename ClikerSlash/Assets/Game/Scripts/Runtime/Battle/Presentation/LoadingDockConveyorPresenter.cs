@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Entities;
 using UnityEngine;
 
 namespace ClikerSlash.Battle
@@ -51,7 +52,15 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            ApplyOffset(Time.time * environment.conveyorUvSpeedY);
+            var activeLaneStartIndex = 0;
+            var activeLaneCount = int.MaxValue;
+            if (TryGetActiveLaneRange(out var resolvedActiveLaneStartIndex, out var resolvedActiveLaneCount))
+            {
+                activeLaneStartIndex = resolvedActiveLaneStartIndex;
+                activeLaneCount = resolvedActiveLaneCount;
+            }
+
+            ApplyOffset(Time.time * environment.conveyorUvSpeedY, activeLaneStartIndex, activeLaneCount);
         }
 
         /// <summary>
@@ -100,10 +109,12 @@ namespace ClikerSlash.Battle
                     continue;
                 }
 
+                var physicalLaneIndex = ResolvePhysicalLaneIndex(renderer);
                 var scale = sharedMaterial.GetTextureScale(texturePropertyName);
                 var offset = sharedMaterial.GetTextureOffset(texturePropertyName);
                 _rendererStates.Add(new ConveyorRendererState(
                     renderer,
+                    physicalLaneIndex,
                     new Vector4(scale.x, scale.y, offset.x, offset.y)));
             }
 
@@ -113,7 +124,7 @@ namespace ClikerSlash.Battle
         /// <summary>
         /// 기존 property block을 유지한 채 texture ST 벡터의 Y 오프셋만 시간값으로 갱신합니다.
         /// </summary>
-        private void ApplyOffset(float offsetY)
+        private void ApplyOffset(float offsetY, int activeLaneStartIndex, int activeLaneCount)
         {
             _lastAppliedOffsetY = offsetY;
             for (var index = _rendererStates.Count - 1; index >= 0; index--)
@@ -128,6 +139,13 @@ namespace ClikerSlash.Battle
                 // 이미 다른 property block이 붙어 있어도 UV 오프셋 값만 덮어쓰도록 기존 블록을 읽어옵니다.
                 rendererState.Renderer.GetPropertyBlock(_propertyBlock);
                 var baseTextureSt = rendererState.BaseTextureSt;
+                if (!ShouldAnimateRenderer(rendererState, activeLaneStartIndex, activeLaneCount))
+                {
+                    _propertyBlock.SetVector(_cachedTextureStPropertyId, baseTextureSt);
+                    rendererState.Renderer.SetPropertyBlock(_propertyBlock);
+                    continue;
+                }
+
                 _propertyBlock.SetVector(
                     _cachedTextureStPropertyId,
                     new Vector4(baseTextureSt.x, baseTextureSt.y, baseTextureSt.z, baseTextureSt.w + offsetY));
@@ -175,14 +193,74 @@ namespace ClikerSlash.Battle
 
         private readonly struct ConveyorRendererState
         {
-            public ConveyorRendererState(Renderer renderer, Vector4 baseTextureSt)
+            public ConveyorRendererState(Renderer renderer, int physicalLaneIndex, Vector4 baseTextureSt)
             {
                 Renderer = renderer;
+                PhysicalLaneIndex = physicalLaneIndex;
                 BaseTextureSt = baseTextureSt;
             }
 
             public Renderer Renderer { get; }
+            public int PhysicalLaneIndex { get; }
             public Vector4 BaseTextureSt { get; }
+        }
+
+        private static int ResolvePhysicalLaneIndex(Renderer renderer)
+        {
+            for (var current = renderer != null ? renderer.transform : null; current != null; current = current.parent)
+            {
+                if (!current.name.StartsWith("Lane_", System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var numericSuffix = current.name["Lane_".Length..];
+                if (int.TryParse(numericSuffix, out var laneNumber))
+                {
+                    return Mathf.Max(0, laneNumber - 1);
+                }
+            }
+
+            return -1;
+        }
+
+        private static bool ShouldAnimateRenderer(ConveyorRendererState rendererState, int activeLaneStartIndex, int activeLaneCount)
+        {
+            return rendererState.PhysicalLaneIndex < 0 ||
+                   BattleLaneUtility.IsLaneActive(rendererState.PhysicalLaneIndex, activeLaneStartIndex, activeLaneCount);
+        }
+
+        private static bool TryGetActiveLaneRange(out int activeLaneStartIndex, out int activeLaneCount)
+        {
+            activeLaneStartIndex = 0;
+            activeLaneCount = 0;
+
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !world.IsCreated)
+            {
+                return false;
+            }
+
+            var entityManager = world.EntityManager;
+            using var laneQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<LaneLayout>());
+            if (laneQuery.IsEmptyIgnoreFilter)
+            {
+                return false;
+            }
+
+            var laneLayout = laneQuery.GetSingleton<LaneLayout>();
+            activeLaneCount = laneLayout.LaneCount;
+
+            using var sessionRuleQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<SessionRuleState>());
+            if (sessionRuleQuery.IsEmptyIgnoreFilter)
+            {
+                return true;
+            }
+
+            var sessionRules = sessionRuleQuery.GetSingleton<SessionRuleState>();
+            activeLaneStartIndex = sessionRules.ActiveLaneStartIndex;
+            activeLaneCount = sessionRules.ActiveLaneCount;
+            return true;
         }
     }
 }

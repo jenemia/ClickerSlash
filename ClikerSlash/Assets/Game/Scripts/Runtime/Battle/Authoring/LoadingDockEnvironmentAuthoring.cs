@@ -17,7 +17,7 @@ namespace ClikerSlash.Battle
         public Transform[] cargoSlotAnchors;
         public Renderer[] conveyorBeltRenderers = Array.Empty<Renderer>();
         public string conveyorTexturePropertyName = "_BaseMap";
-        public float conveyorUvSpeedY = 0.485f;
+        public float conveyorUvSpeedY = 0.388f;
         public Vector3 globalCargoOffset;
         public Vector3 standardCargoOffset;
         public Vector3 fragileCargoOffset;
