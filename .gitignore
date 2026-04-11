@@ -5,3 +5,4 @@ ClikerSlash/UserSettings
 ClikerSlash/obj
 *.csproj
 *.sln
+.openclaw
