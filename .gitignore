@@ -7,3 +7,5 @@ ClikerSlash/obj
 *.sln
 .openclaw
 ClikerSlash/.idea
+ClikerSlash/Assets/FactoryAsset
+ClikerSlash/Assets/FactoryAsset.meta
