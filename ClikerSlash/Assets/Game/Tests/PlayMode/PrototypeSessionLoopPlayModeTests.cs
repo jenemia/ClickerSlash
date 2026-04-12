@@ -7,6 +7,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -20,6 +21,40 @@ namespace ClikerSlash.Tests.PlayMode
     /// </summary>
     public class PrototypeSessionLoopPlayModeTests
     {
+        /// <summary>
+        /// 전투 진입 시 환경 씬이 additive로 붙고, 활성 씬과 입력 소유권은 계속 전투 씬에 남아야 합니다.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BattleSceneLoadsPrototypeEnvironmentAdditivelyAndKeepsBattleOwnership()
+        {
+            PrototypeSessionRuntime.ResetPrototypeState();
+
+            yield return LoadSceneAndWait(PrototypeSessionRuntime.BattleSceneName);
+
+            var battleScene = SceneManager.GetSceneByName(PrototypeSessionRuntime.BattleSceneName);
+            var environmentScene = SceneManager.GetSceneByName(PrototypeSessionRuntime.BattleEnvironmentSceneName);
+
+            Assert.That(battleScene.IsValid() && battleScene.isLoaded, Is.True);
+            Assert.That(environmentScene.IsValid() && environmentScene.isLoaded, Is.True);
+            Assert.That(SceneManager.GetActiveScene().name, Is.EqualTo(PrototypeSessionRuntime.BattleSceneName));
+            Assert.That(CountActiveComponents<EventSystem>(), Is.EqualTo(1));
+
+            AssertSceneObjectActive(environmentScene, "DistributionCenterScripts", false);
+            AssertSceneObjectActive(environmentScene, "cam", false);
+            AssertSceneObjectActive(environmentScene, "audio", false);
+            AssertSceneObjectActive(environmentScene, "Canvas", false);
+            AssertSceneObjectActive(environmentScene, "EventSystem", false);
+            AssertSceneObjectActive(environmentScene, "Directional Light", false);
+            AssertSceneObjectActive(environmentScene, "ModalCanvas", false);
+            AssertSceneObjectActive(environmentScene, "FullscreenPanel", false);
+            AssertSceneObjectActive(environmentScene, "assembly_instruction Variant", false);
+            AssertSceneObjectActive(environmentScene, "CameraRT", false);
+            AssertSceneObjectActive(environmentScene, "immersiveTraining_screen_prefab", false);
+            AssertSceneObjectActive(environmentScene, "moto_bot_forassembly", false);
+            AssertSceneObjectActive(environmentScene, "env", true);
+            AssertSceneObjectActive(environmentScene, "reflectionProbe", true);
+        }
+
         /// <summary>
         /// 허브 체력 레벨이 전투 진입 시 실제 작업시간으로 반영되는지 검증합니다.
         /// </summary>
@@ -1395,12 +1430,17 @@ namespace ClikerSlash.Tests.PlayMode
 
         private static IEnumerator WaitForSceneAndWorld(string sceneName)
         {
+            var shouldWaitForEnvironment =
+                sceneName == PrototypeSessionRuntime.BattleSceneName &&
+                Application.CanStreamedLevelBeLoaded(PrototypeSessionRuntime.BattleEnvironmentSceneName);
+
             yield return null;
             yield return null;
             yield return new WaitUntil(() =>
                 SceneManager.GetActiveScene().name == sceneName &&
                 World.DefaultGameObjectInjectionWorld != null &&
-                World.DefaultGameObjectInjectionWorld.IsCreated);
+                World.DefaultGameObjectInjectionWorld.IsCreated &&
+                (!shouldWaitForEnvironment || PrototypeBattleEnvironmentSceneBootstrap.IsBattleEnvironmentLoaded()));
         }
 
         private static void FreezeRandomSpawns(EntityManager entityManager)
@@ -1459,6 +1499,61 @@ namespace ClikerSlash.Tests.PlayMode
             }
 
             return null;
+        }
+
+        private static void AssertSceneObjectActive(Scene scene, string objectName, bool expectedActive)
+        {
+            var gameObject = FindSceneObject(scene, objectName);
+            Assert.That(gameObject, Is.Not.Null, $"Could not find '{objectName}' inside scene '{scene.name}'.");
+            Assert.That(gameObject.activeSelf, Is.EqualTo(expectedActive), $"Unexpected activeSelf for '{objectName}'.");
+        }
+
+        private static GameObject FindSceneObject(Scene scene, string objectName)
+        {
+            foreach (var rootGameObject in scene.GetRootGameObjects())
+            {
+                var match = FindTransformByName(rootGameObject.transform, objectName);
+                if (match != null)
+                {
+                    return match.gameObject;
+                }
+            }
+
+            return null;
+        }
+
+        private static Transform FindTransformByName(Transform root, string objectName)
+        {
+            if (root.name == objectName)
+            {
+                return root;
+            }
+
+            for (var childIndex = 0; childIndex < root.childCount; childIndex += 1)
+            {
+                var match = FindTransformByName(root.GetChild(childIndex), objectName);
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        private static int CountActiveComponents<T>() where T : Component
+        {
+            var count = 0;
+            var components = Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var component in components)
+            {
+                if (component != null && component.gameObject.activeInHierarchy)
+                {
+                    count += 1;
+                }
+            }
+
+            return count;
         }
 
         private static GameObject FindPresentationChild(BattlePresentationBridge bridge, string childName)

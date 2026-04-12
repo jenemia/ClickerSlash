@@ -18,6 +18,7 @@ namespace ClikerSlash.Editor
     public static class PrototypeBattleSceneBuilder
     {
         private const string ScenePath = "Assets/Game/Scenes/PrototypeBattle.unity";
+        private const string EnvironmentScenePath = "Assets/Game/Scenes/PrototypeEvn.unity";
         private const string HubScenePath = "Assets/Game/Scenes/PrototypeHub.unity";
         private static readonly Vector3 LoadingDockVirtualCameraPosition = new(13.64f, 11.22f, -9.6f);
         private static readonly Vector3 LoadingDockVirtualCameraRotation = new(39.583f, 18f, 0f);
@@ -72,15 +73,27 @@ namespace ClikerSlash.Editor
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
             CreateHubScene();
-            EditorBuildSettings.scenes = new[]
-            {
-                new EditorBuildSettingsScene(ScenePath, true),
-                new EditorBuildSettingsScene(HubScenePath, true)
-            };
+            EditorBuildSettings.scenes = BuildConfiguredScenes();
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log($"Prototype logistics scene generated at {ScenePath}");
+        }
+
+        private static EditorBuildSettingsScene[] BuildConfiguredScenes()
+        {
+            var configuredScenes = new List<EditorBuildSettingsScene>
+            {
+                new(ScenePath, true),
+                new(HubScenePath, true)
+            };
+
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(EnvironmentScenePath) != null)
+            {
+                configuredScenes.Add(new EditorBuildSettingsScene(EnvironmentScenePath, true));
+            }
+
+            return configuredScenes.ToArray();
         }
 
         private static BattleViewAuthoring CreateBattleViewRoot()

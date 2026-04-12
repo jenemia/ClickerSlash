@@ -22,6 +22,7 @@ namespace ClikerSlash.Battle
     public static class PrototypeSessionRuntime
     {
         public const string BattleSceneName = "PrototypeBattle";
+        public const string BattleEnvironmentSceneName = "PrototypeEvn";
         public const string HubSceneName = "PrototypeHub";
         public const int MinimumHealthLevel = 1;
         public const float DefaultBaseWorkDurationSeconds = 30f;

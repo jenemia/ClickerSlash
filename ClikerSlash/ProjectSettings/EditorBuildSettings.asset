@@ -11,6 +11,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Game/Scenes/PrototypeHub.unity
     guid: 1ad009a6ff612448c995ecd3ee1d2999
+  - enabled: 1
+    path: Assets/Game/Scenes/PrototypeEvn.unity
+    guid: 4bb3fae5f738457a868127dd6e0d1096
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

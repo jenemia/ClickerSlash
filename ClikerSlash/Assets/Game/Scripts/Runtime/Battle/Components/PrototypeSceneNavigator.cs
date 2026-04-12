@@ -1,3 +1,4 @@
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace ClikerSlash.Battle
@@ -26,6 +27,98 @@ namespace ClikerSlash.Battle
             PrototypeSessionRuntime.ClosePauseMenu();
             PrototypeSessionRuntime.RequestBattleEntry();
             SceneManager.LoadScene(PrototypeSessionRuntime.BattleSceneName);
+        }
+    }
+
+    /// <summary>
+    /// 전투 씬이 열릴 때 패시브 환경 씬을 additive로 붙이고, 활성 씬 소유권을 전투 씬에 고정합니다.
+    /// </summary>
+    public static class PrototypeBattleEnvironmentSceneBootstrap
+    {
+        private static bool _hasWarnedMissingEnvironmentScene;
+
+        /// <summary>
+        /// 전투용 환경 씬이 현재 로드되어 있는지 반환합니다.
+        /// </summary>
+        public static bool IsBattleEnvironmentLoaded()
+        {
+            var environmentScene = SceneManager.GetSceneByName(PrototypeSessionRuntime.BattleEnvironmentSceneName);
+            return environmentScene.IsValid() && environmentScene.isLoaded;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticState()
+        {
+            _hasWarnedMissingEnvironmentScene = false;
+            SceneManager.sceneLoaded -= HandleSceneLoaded;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void InstallHooks()
+        {
+            SceneManager.sceneLoaded -= HandleSceneLoaded;
+            SceneManager.sceneLoaded += HandleSceneLoaded;
+        }
+
+        private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (scene.name == PrototypeSessionRuntime.BattleSceneName)
+            {
+                EnsureBattleEnvironmentScene();
+                return;
+            }
+
+            if (scene.name != PrototypeSessionRuntime.BattleEnvironmentSceneName)
+            {
+                return;
+            }
+
+            EnsureBattleSceneActive();
+            if (LightmapSettings.lightProbes != null)
+            {
+                LightProbes.Tetrahedralize();
+            }
+        }
+
+        private static void EnsureBattleEnvironmentScene()
+        {
+            if (IsBattleEnvironmentLoaded())
+            {
+                EnsureBattleSceneActive();
+                return;
+            }
+
+            if (!Application.CanStreamedLevelBeLoaded(PrototypeSessionRuntime.BattleEnvironmentSceneName))
+            {
+                if (_hasWarnedMissingEnvironmentScene)
+                {
+                    return;
+                }
+
+                Debug.LogWarning(
+                    $"Battle environment scene '{PrototypeSessionRuntime.BattleEnvironmentSceneName}' is not available in build settings. " +
+                    "PrototypeBattle will continue without the additive environment scene.");
+                _hasWarnedMissingEnvironmentScene = true;
+                return;
+            }
+
+            SceneManager.LoadSceneAsync(PrototypeSessionRuntime.BattleEnvironmentSceneName, LoadSceneMode.Additive);
+        }
+
+        private static void EnsureBattleSceneActive()
+        {
+            var battleScene = SceneManager.GetSceneByName(PrototypeSessionRuntime.BattleSceneName);
+            if (!battleScene.IsValid() || !battleScene.isLoaded)
+            {
+                return;
+            }
+
+            if (SceneManager.GetActiveScene() == battleScene)
+            {
+                return;
+            }
+
+            SceneManager.SetActiveScene(battleScene);
         }
     }
 }
