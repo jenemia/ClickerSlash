@@ -19,9 +19,10 @@ namespace ClikerSlash.Editor
     {
         private const string ScenePath = "Assets/Game/Scenes/PrototypeBattle.unity";
         private const string HubScenePath = "Assets/Game/Scenes/PrototypeHub.unity";
-        private static readonly Vector3 LoadingDockVirtualCameraPosition = new(13.64f, 11.22f, -9.6f);
-        private static readonly Vector3 LoadingDockVirtualCameraRotation = new(39.583f, 18f, 0f);
 
+        /// <summary>
+        /// 프로토타입 전투 씬과 허브 씬을 최신 3구역 구조로 다시 생성합니다.
+        /// </summary>
         [MenuItem("Tools/ClikerSlash/Build Prototype Battle Scene")]
         public static void BuildPrototypeBattleScene()
         {
@@ -64,9 +65,10 @@ namespace ClikerSlash.Editor
                 mainCamera,
                 battleView,
                 loadingDockEnvironment,
+                out var approvalVirtualCamera,
                 out var laneVirtualCamera,
                 out var loadingDockVirtualCamera);
-            CreateHudRoot(mainCamera, laneVirtualCamera, loadingDockVirtualCamera);
+            CreateHudRoot(mainCamera, approvalVirtualCamera, laneVirtualCamera, loadingDockVirtualCamera);
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
             CreateHubScene();
@@ -81,6 +83,9 @@ namespace ClikerSlash.Editor
             Debug.Log($"Prototype logistics scene generated at {ScenePath}");
         }
 
+        /// <summary>
+        /// 전투 레인과 세 구역 카메라 기준값을 담는 BattleView 루트를 생성합니다.
+        /// </summary>
         private static BattleViewAuthoring CreateBattleViewRoot()
         {
             var battleViewRoot = new GameObject("BattleView");
@@ -88,6 +93,10 @@ namespace ClikerSlash.Editor
             battleView.CameraPosition = new Vector3(0f, 10.6f, -16.8f);
             battleView.CameraRotation = new Vector3(31f, 0f, 0f);
             battleView.CameraFieldOfView = 34f;
+            battleView.ApprovalCameraPosition = new Vector3(13.6f, 10.4f, -12.2f);
+            battleView.ApprovalCameraRotation = new Vector3(35f, 14f, 0f);
+            battleView.LoadingDockCameraPosition = new Vector3(13.64f, 11.22f, -9.6f);
+            battleView.LoadingDockCameraRotation = new Vector3(39.583f, 18f, 0f);
             battleView.LaneWorldXs = new List<float> { -8f, -4f, 0f, 4f, 8f };
             battleView.LaneWidth = 2.4f;
             battleView.LaneLength = 15f;
@@ -341,8 +350,7 @@ namespace ClikerSlash.Editor
             var playerRoot = new GameObject("WorkerSpawn");
             var playerAuthoring = playerRoot.AddComponent<PlayerAuthoring>();
             playerAuthoring.InitialLane = 2;
-            playerAuthoring.Y = 0.6f;
-            playerAuthoring.Z = battleView.PlayerZ;
+            playerRoot.transform.position = new Vector3(0f, 0.6f, battleView.PlayerZ);
 
             var cargoRoot = new GameObject("CargoPrototype");
             var cargoAuthoring = cargoRoot.AddComponent<CargoAuthoring>();
@@ -357,12 +365,16 @@ namespace ClikerSlash.Editor
             laneRoot.transform.position = Vector3.zero;
         }
 
+        /// <summary>
+        /// 메인 카메라와 3개 virtual camera, 주요 프레젠터를 한 루트 아래에 생성합니다.
+        /// </summary>
         private static void CreatePresentationRoot(
             GameObject workerPrefab,
             CargoVisualPrefabSet cargoVisualPrefabs,
             Camera mainCamera,
             BattleViewAuthoring battleView,
             LoadingDockEnvironmentAuthoring loadingDockEnvironment,
+            out CinemachineCamera approvalVirtualCamera,
             out CinemachineCamera laneVirtualCamera,
             out CinemachineCamera loadingDockVirtualCamera)
         {
@@ -371,18 +383,25 @@ namespace ClikerSlash.Editor
             var approvalPresenter = presentationRoot.AddComponent<ApprovalMiniGamePresenter>();
             var routePresenter = presentationRoot.AddComponent<RouteLaneSelectionPresenter>();
 
+            approvalVirtualCamera = CreateVirtualCamera(
+                "ApprovalVirtualCamera",
+                presentationRoot.transform,
+                battleView.ApprovalCameraPosition,
+                Quaternion.Euler(battleView.ApprovalCameraRotation),
+                battleView.CameraFieldOfView,
+                20);
             laneVirtualCamera = CreateVirtualCamera(
                 "LaneVirtualCamera",
                 presentationRoot.transform,
                 battleView.CameraPosition,
                 Quaternion.Euler(battleView.CameraRotation),
                 battleView.CameraFieldOfView,
-                20);
+                10);
             loadingDockVirtualCamera = CreateVirtualCamera(
                 "LoadingDockVirtualCamera",
                 presentationRoot.transform,
-                LoadingDockVirtualCameraPosition,
-                Quaternion.Euler(LoadingDockVirtualCameraRotation),
+                battleView.LoadingDockCameraPosition,
+                Quaternion.Euler(battleView.LoadingDockCameraRotation),
                 battleView.CameraFieldOfView,
                 10);
 
@@ -390,6 +409,7 @@ namespace ClikerSlash.Editor
                 mainCamera,
                 battleView,
                 loadingDockEnvironment,
+                approvalVirtualCamera,
                 laneVirtualCamera,
                 loadingDockVirtualCamera);
             bridge.BindVisualPrefabs(workerPrefab, cargoVisualPrefabs);
@@ -417,8 +437,12 @@ namespace ClikerSlash.Editor
             return virtualCamera;
         }
 
+        /// <summary>
+        /// HUD 텍스트와 결과 패널을 만들고 카메라 프레젠터를 연결합니다.
+        /// </summary>
         private static void CreateHudRoot(
             Camera mainCamera,
+            CinemachineCamera approvalVirtualCamera,
             CinemachineCamera laneVirtualCamera,
             CinemachineCamera loadingDockVirtualCamera)
         {
@@ -433,24 +457,11 @@ namespace ClikerSlash.Editor
             scaler.matchWidthOrHeight = 0.5f;
 
             var presenter = hudRoot.AddComponent<BattleHudPresenter>();
-            var previewPresenter = hudRoot.AddComponent<BattleAreaPreviewPresenter>();
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf") ??
                        Resources.GetBuiltinResource<Font>("Arial.ttf");
 
-            var previewLabel = CreateHudText("AreaPreviewLabel", hudRoot.transform, font, 22, TextAnchor.UpperLeft);
-            SetRect(previewLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -12f), new Vector2(260f, 28f));
-            previewLabel.text = "Other Area";
-
-            var previewFrame = CreateHudImage("AreaPreviewFrame", hudRoot.transform, new Color(0.08f, 0.10f, 0.14f, 0.95f));
-            SetRect(previewFrame.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -132f), new Vector2(332f, 192f));
-
-            var previewImage = CreateHudRawImage("AreaPreviewImage", previewFrame.transform, Color.white);
-            SetRect(previewImage.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(320f, 180f));
-            previewPresenter.BindSceneReferences(mainCamera, laneVirtualCamera, loadingDockVirtualCamera);
-            previewPresenter.BindPreviewImage(previewImage);
-
             var infoText = CreateHudText("InfoText", hudRoot.transform, font, 28, TextAnchor.UpperLeft);
-            SetRect(infoText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -248f), new Vector2(360f, 160f));
+            SetRect(infoText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(30f, -40f), new Vector2(360f, 200f));
             infoText.text = "Work 30.0s\nMoney 0\nCombo 0";
 
             var laneText = CreateHudText("LaneText", hudRoot.transform, font, 30, TextAnchor.UpperCenter);
@@ -469,7 +480,7 @@ namespace ClikerSlash.Editor
             resultText.gameObject.SetActive(false);
 
             presenter.Bind(infoText, laneText, resultText, controlsText);
-            EditorUtility.SetDirty(previewPresenter);
+            EditorUtility.SetDirty(presenter);
         }
 
         private static Text CreateHudText(string name, Transform parent, Font font, int fontSize, TextAnchor anchor)

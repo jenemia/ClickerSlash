@@ -40,9 +40,13 @@ namespace ClikerSlash.Battle
             stats.ValueRW.WorkedTimeSeconds = elapsedWorkTime;
             var runtimeSnapshot = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot();
             phaseState.ValueRW.CurrentPhase = runtimeSnapshot.CurrentPhase;
+            phaseState.ValueRW.FocusedArea = runtimeSnapshot.FocusedArea;
             phaseState.ValueRW.PendingApprovalCount = runtimeSnapshot.PendingApprovalCount;
             phaseState.ValueRW.PendingRouteCount = runtimeSnapshot.PendingRouteCount;
+            phaseState.ValueRW.PendingLoadingDockCount = runtimeSnapshot.PendingLoadingDockCount;
             phaseState.ValueRW.HasActiveCargo = runtimeSnapshot.HasActiveCargo ? (byte)1 : (byte)0;
+            phaseState.ValueRW.HasActiveApprovalCargo = runtimeSnapshot.HasApprovalCargo ? (byte)1 : (byte)0;
+            phaseState.ValueRW.HasActiveRouteCargo = runtimeSnapshot.HasRouteCargo ? (byte)1 : (byte)0;
         }
     }
 }

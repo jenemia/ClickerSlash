@@ -40,6 +40,7 @@ namespace ClikerSlash.Battle
     public static class PrototypeSessionRuntime
     {
         public const string BattleSceneName = "PrototypeBattle";
+        public const string BattleEnvironmentSceneName = "PrototypeEvn";
         public const string HubSceneName = "PrototypeHub";
         public const int MinimumHealthLevel = 1;
         public const float DefaultBaseWorkDurationSeconds = 30f;
@@ -57,9 +58,12 @@ namespace ClikerSlash.Battle
 
         private static readonly Queue<ApprovalCargoSnapshot> _pendingApprovalQueue = new();
         private static readonly Queue<RouteSelectionCargoSnapshot> _pendingRouteQueue = new();
+        private static readonly Queue<LoadingDockCargoQueueEntry> _loadingDockBacklogQueue = new();
+        private static readonly List<LoadingDockCargoQueueEntry> _loadingDockActiveEntries = new();
         private static int _nextCargoEntryId = 1;
-        private static BattleMiniGamePhase _currentMiniGamePhase = BattleMiniGamePhase.Approval;
-        private static bool _hasActiveCargo;
+        private static BattleMiniGameArea _focusedMiniGameArea = BattleMiniGameArea.Approval;
+        private static bool _hasActiveApprovalCargo;
+        private static bool _hasActiveRouteCargo;
         private static PendingPhaseInput _pendingPhaseInput;
         private static MetaProgressionRuntimeState _metaProgressionRuntimeState;
 
@@ -108,44 +112,143 @@ namespace ClikerSlash.Battle
             return _metaProgressionRuntimeState.resolvedProgression;
         }
 
+        /// <summary>
+        /// HUD와 프레젠터가 읽을 수 있는 현재 세션의 구역 요약 정보를 반환합니다.
+        /// </summary>
         public static BattleMiniGamePhaseSnapshot GetBattleMiniGamePhaseSnapshot()
         {
             return new BattleMiniGamePhaseSnapshot
             {
-                CurrentPhase = _currentMiniGamePhase,
-                HasActiveCargo = _hasActiveCargo,
+                CurrentPhase = ConvertAreaToPhase(_focusedMiniGameArea),
+                FocusedArea = _focusedMiniGameArea,
+                HasActiveCargo = HasActiveCargoInArea(_focusedMiniGameArea),
+                HasApprovalCargo = _hasActiveApprovalCargo,
+                HasRouteCargo = _hasActiveRouteCargo,
                 PendingApprovalCount = _pendingApprovalQueue.Count,
                 PendingRouteCount = _pendingRouteQueue.Count,
+                PendingLoadingDockCount = _loadingDockActiveEntries.Count + _loadingDockBacklogQueue.Count,
                 DeliveryLaneMaxWeight = DefaultDeliveryLaneMaxWeight
             };
         }
 
+        /// <summary>
+        /// 현재 플레이어가 조작 중인 미니게임 구역을 반환합니다.
+        /// </summary>
+        public static BattleMiniGameArea GetFocusedMiniGameArea()
+        {
+            return _focusedMiniGameArea;
+        }
+
+        /// <summary>
+        /// 이전 순서의 미니게임 구역으로 카메라 포커스를 이동합니다.
+        /// </summary>
+        public static void FocusPreviousMiniGameArea()
+        {
+            _focusedMiniGameArea = _focusedMiniGameArea switch
+            {
+                BattleMiniGameArea.Approval => BattleMiniGameArea.LoadingDock,
+                BattleMiniGameArea.RouteSelection => BattleMiniGameArea.Approval,
+                _ => BattleMiniGameArea.RouteSelection
+            };
+        }
+
+        /// <summary>
+        /// 다음 순서의 미니게임 구역으로 카메라 포커스를 이동합니다.
+        /// </summary>
+        public static void FocusNextMiniGameArea()
+        {
+            _focusedMiniGameArea = _focusedMiniGameArea switch
+            {
+                BattleMiniGameArea.Approval => BattleMiniGameArea.RouteSelection,
+                BattleMiniGameArea.RouteSelection => BattleMiniGameArea.LoadingDock,
+                _ => BattleMiniGameArea.Approval
+            };
+        }
+
+        /// <summary>
+        /// 특정 구역이 현재 플레이어 포커스를 받고 있는지 반환합니다.
+        /// </summary>
+        public static bool IsMiniGameAreaFocused(BattleMiniGameArea area)
+        {
+            return _focusedMiniGameArea == area;
+        }
+
+        /// <summary>
+        /// 비포커스 상태에서도 자동 판정을 허용할지 여부를 반환합니다.
+        /// </summary>
+        public static bool CanAutoResolveWhenUnfocused(BattleMiniGameArea area)
+        {
+            return false;
+        }
+
+        /// <summary>
+        /// 해당 구역의 물류가 판정선에 도달했을 때 대기해야 하는지 여부를 반환합니다.
+        /// </summary>
+        public static bool ShouldHoldAtJudgment(BattleMiniGameArea area)
+        {
+            return area is BattleMiniGameArea.Approval or BattleMiniGameArea.RouteSelection;
+        }
+
+        /// <summary>
+        /// 특정 판정 구역에 현재 활성 물류가 존재하는지 반환합니다.
+        /// </summary>
+        public static bool HasActiveCargoInArea(BattleMiniGameArea area)
+        {
+            return area switch
+            {
+                BattleMiniGameArea.Approval => _hasActiveApprovalCargo,
+                BattleMiniGameArea.RouteSelection => _hasActiveRouteCargo,
+                _ => _loadingDockActiveEntries.Count > 0
+            };
+        }
+
+        /// <summary>
+        /// 아직 승인 구역에 도달하지 않은 대기 물류 목록을 배열로 반환합니다.
+        /// </summary>
         public static ApprovalCargoSnapshot[] GetPendingApprovalCargoEntries()
         {
             return _pendingApprovalQueue.ToArray();
         }
 
+        /// <summary>
+        /// 승인 결과가 반영되어 레인선택을 기다리는 물류 목록을 배열로 반환합니다.
+        /// </summary>
         public static RouteSelectionCargoSnapshot[] GetPendingRouteCargoEntries()
         {
             return _pendingRouteQueue.ToArray();
         }
 
+        /// <summary>
+        /// 지정한 출력 레인이 허용하는 최대 무게를 반환합니다.
+        /// </summary>
         public static int GetDeliveryLaneMaxWeight(CargoRouteLane routeLane)
         {
             return routeLane == CargoRouteLane.Return ? int.MaxValue : DefaultDeliveryLaneMaxWeight;
         }
 
+        /// <summary>
+        /// 기본 배송 레인 기준으로 현재 무게가 출고 가능한지 빠르게 판정합니다.
+        /// </summary>
         public static bool IsCargoDeliverable(int weight)
         {
             return weight <= DefaultDeliveryLaneMaxWeight;
         }
 
+        /// <summary>
+        /// 현재 메타 진행 상태에서 상하차 로봇이 해금되었는지 반환합니다.
+        /// </summary>
+        public static bool HasInstalledDockRobot()
+        {
+            return GetResolvedMetaProgression().HasDockRobotAccess;
+        }
+
         public static void InitializeRhythmCargoPlan(float resolvedWorkDurationSeconds, float spawnIntervalSeconds, CargoConfig cargoConfig, uint seed)
         {
             ClearRhythmQueues();
-            _currentMiniGamePhase = BattleMiniGamePhase.Approval;
+            _focusedMiniGameArea = BattleMiniGameArea.Approval;
             _pendingPhaseInput = PendingPhaseInput.None;
-            _hasActiveCargo = false;
+            _hasActiveApprovalCargo = false;
+            _hasActiveRouteCargo = false;
 
             var safeInterval = Mathf.Max(0.25f, spawnIntervalSeconds * 2f);
             var totalCargoCount = Mathf.Max(6, Mathf.CeilToInt(resolvedWorkDurationSeconds / safeInterval));
@@ -173,9 +276,10 @@ namespace ClikerSlash.Battle
         public static void InitializeRhythmCargoPlan(IReadOnlyList<ApprovalCargoSnapshot> plannedCargoEntries)
         {
             ClearRhythmQueues();
-            _currentMiniGamePhase = BattleMiniGamePhase.Approval;
+            _focusedMiniGameArea = BattleMiniGameArea.Approval;
             _pendingPhaseInput = PendingPhaseInput.None;
-            _hasActiveCargo = false;
+            _hasActiveApprovalCargo = false;
+            _hasActiveRouteCargo = false;
 
             var nextEntryId = 1;
             if (plannedCargoEntries == null)
@@ -199,73 +303,83 @@ namespace ClikerSlash.Battle
             _nextCargoEntryId = nextEntryId;
         }
 
-        public static bool TryDequeueNextPhaseCargo(
+        /// <summary>
+        /// 지정한 구역이 새 활성 물류를 시작할 수 있을 때 다음 엔트리를 꺼냅니다.
+        /// </summary>
+        public static bool TryDequeueCargoForArea(
+            BattleMiniGameArea area,
             out BattleMiniGamePhase phase,
             out ApprovalCargoSnapshot approvalCargo,
             out RouteSelectionCargoSnapshot routeCargo)
         {
-            phase = _currentMiniGamePhase;
+            phase = ConvertAreaToPhase(area);
             approvalCargo = default;
             routeCargo = default;
 
-            if (_hasActiveCargo)
+            if (area == BattleMiniGameArea.Approval)
             {
-                return false;
-            }
-
-            if (_currentMiniGamePhase == BattleMiniGamePhase.Approval)
-            {
-                if (_pendingApprovalQueue.Count > 0)
+                if (_hasActiveApprovalCargo || _pendingApprovalQueue.Count == 0)
                 {
-                    approvalCargo = _pendingApprovalQueue.Dequeue();
-                    _hasActiveCargo = true;
-                    return true;
+                    return false;
                 }
 
-                _currentMiniGamePhase = _pendingRouteQueue.Count > 0
-                    ? BattleMiniGamePhase.RouteSelection
-                    : BattleMiniGamePhase.Completed;
-                phase = _currentMiniGamePhase;
+                approvalCargo = _pendingApprovalQueue.Dequeue();
+                _hasActiveApprovalCargo = true;
+                return true;
             }
 
-            if (_currentMiniGamePhase == BattleMiniGamePhase.RouteSelection)
+            if (area == BattleMiniGameArea.RouteSelection)
             {
-                if (_pendingRouteQueue.Count > 0)
+                if (_hasActiveRouteCargo || _pendingRouteQueue.Count == 0)
                 {
-                    routeCargo = _pendingRouteQueue.Dequeue();
-                    _hasActiveCargo = true;
-                    return true;
+                    return false;
                 }
 
-                _currentMiniGamePhase = BattleMiniGamePhase.Completed;
-                phase = _currentMiniGamePhase;
+                routeCargo = _pendingRouteQueue.Dequeue();
+                _hasActiveRouteCargo = true;
+                return true;
             }
 
             return false;
         }
 
+        /// <summary>
+        /// 지정한 구역의 활성 물류가 판정을 마쳤음을 런타임 상태에 반영합니다.
+        /// </summary>
+        public static void NotifyAreaCargoResolved(BattleMiniGameArea area)
+        {
+            switch (area)
+            {
+                case BattleMiniGameArea.Approval:
+                    _hasActiveApprovalCargo = false;
+                    break;
+                case BattleMiniGameArea.RouteSelection:
+                    _hasActiveRouteCargo = false;
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// 레거시 호출부와의 호환을 위해 현재 포커스 구역 기준으로 활성 물류 해제를 처리합니다.
+        /// </summary>
         public static void NotifyActiveCargoResolved()
         {
-            _hasActiveCargo = false;
-            if (_currentMiniGamePhase == BattleMiniGamePhase.Approval && _pendingApprovalQueue.Count == 0)
-            {
-                _currentMiniGamePhase = _pendingRouteQueue.Count > 0
-                    ? BattleMiniGamePhase.RouteSelection
-                    : BattleMiniGamePhase.Completed;
-                return;
-            }
-
-            if (_currentMiniGamePhase == BattleMiniGamePhase.RouteSelection && _pendingRouteQueue.Count == 0)
-            {
-                _currentMiniGamePhase = BattleMiniGamePhase.Completed;
-            }
+            NotifyAreaCargoResolved(_focusedMiniGameArea);
         }
 
         public static bool IsMiniGameLoopFinished()
         {
-            return _currentMiniGamePhase == BattleMiniGamePhase.Completed && !_hasActiveCargo;
+            return _pendingApprovalQueue.Count == 0 &&
+                   _pendingRouteQueue.Count == 0 &&
+                   _loadingDockBacklogQueue.Count == 0 &&
+                   _loadingDockActiveEntries.Count == 0 &&
+                   !_hasActiveApprovalCargo &&
+                   !_hasActiveRouteCargo;
         }
 
+        /// <summary>
+        /// 승인 구역에서 입력된 불/가 판정 하나를 런타임 버퍼에 저장합니다.
+        /// </summary>
         public static void QueueApprovalInput(ApprovalDecision decision)
         {
             _pendingPhaseInput = decision switch
@@ -276,6 +390,9 @@ namespace ClikerSlash.Battle
             };
         }
 
+        /// <summary>
+        /// 레인선택 구역에서 입력된 출력 레인 선택 하나를 런타임 버퍼에 저장합니다.
+        /// </summary>
         public static void QueueRouteInput(CargoRouteLane routeLane)
         {
             _pendingPhaseInput = routeLane switch
@@ -289,6 +406,9 @@ namespace ClikerSlash.Battle
             };
         }
 
+        /// <summary>
+        /// 승인 구역이 사용할 수 있는 보류 입력이 있으면 한 번만 꺼내 반환합니다.
+        /// </summary>
         public static bool TryConsumeApprovalInput(out ApprovalDecision decision)
         {
             decision = _pendingPhaseInput switch
@@ -307,6 +427,9 @@ namespace ClikerSlash.Battle
             return true;
         }
 
+        /// <summary>
+        /// 레인선택 구역이 사용할 수 있는 보류 입력이 있으면 한 번만 꺼내 반환합니다.
+        /// </summary>
         public static bool TryConsumeRouteInput(out CargoRouteLane routeLane)
         {
             routeLane = _pendingPhaseInput switch
@@ -328,6 +451,9 @@ namespace ClikerSlash.Battle
             return true;
         }
 
+        /// <summary>
+        /// 승인 판정을 마친 물류를 레인선택 대기열 뒤에 추가합니다.
+        /// </summary>
         public static void EnqueueRouteSelectionCargo(ApprovalCargoSnapshot cargo, ApprovalDecision decision)
         {
             if (decision == ApprovalDecision.None)
@@ -347,6 +473,9 @@ namespace ClikerSlash.Battle
             });
         }
 
+        /// <summary>
+        /// 레인선택 결과가 수익, 반송, 오배차 중 무엇으로 집계될지 계산합니다.
+        /// </summary>
         public static void ResolveRouteOutcome(
             RouteSelectionCargoSnapshot cargo,
             CargoRouteLane selectedRoute,
@@ -400,12 +529,18 @@ namespace ClikerSlash.Battle
             _metaProgressionRuntimeState.snapshot.currency.totalBattleEarned += snapshot.TotalMoney;
         }
 
+        /// <summary>
+        /// 직전 전투 결과 스냅샷을 비워 허브 표시 상태를 초기화합니다.
+        /// </summary>
         public static void ClearLastBattleResult()
         {
             HasLastBattleResult = false;
             LastBattleResult = default;
         }
 
+        /// <summary>
+        /// 전투 세션과 관련된 모든 정적 런타임 상태를 기본값으로 되돌립니다.
+        /// </summary>
         public static void ResetPrototypeState()
         {
             ClosePauseMenu();
@@ -414,9 +549,10 @@ namespace ClikerSlash.Battle
             ClearRhythmQueues();
             ResolvedWorkDurationSeconds = 0f;
             HasPendingBattleEntryRequest = false;
-            _currentMiniGamePhase = BattleMiniGamePhase.Approval;
+            _focusedMiniGameArea = BattleMiniGameArea.Approval;
             _pendingPhaseInput = PendingPhaseInput.None;
-            _hasActiveCargo = false;
+            _hasActiveApprovalCargo = false;
+            _hasActiveRouteCargo = false;
             _metaProgressionRuntimeState = null;
         }
 
@@ -512,39 +648,48 @@ namespace ClikerSlash.Battle
             HasPendingBattleEntryRequest = false;
         }
 
+        /// <summary>
+        /// 포커스 상태를 기준으로 레거시 상하차 프레젠터가 읽을 런타임 스냅샷을 만듭니다.
+        /// </summary>
         public static LoadingDockRuntimeState GetLoadingDockRuntimeState(
             MetaProgressionCatalogAsset catalog = null,
             int physicalLaneCount = int.MaxValue)
         {
             EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
-            var approvalActive = _currentMiniGamePhase == BattleMiniGamePhase.Approval;
+            var loadingDockFocused = _focusedMiniGameArea == BattleMiniGameArea.LoadingDock;
             return new LoadingDockRuntimeState
             {
-                HasLoadingDockAccess = approvalActive,
-                CurrentArea = approvalActive ? WorkAreaType.LoadingDock : WorkAreaType.Lane,
-                TransitionPhase = approvalActive ? WorkAreaTransitionPhase.ActiveInLoadingDock : WorkAreaTransitionPhase.None,
+                HasLoadingDockAccess = true,
+                CurrentArea = loadingDockFocused ? WorkAreaType.LoadingDock : WorkAreaType.Lane,
+                TransitionPhase = loadingDockFocused ? WorkAreaTransitionPhase.ActiveInLoadingDock : WorkAreaTransitionPhase.None,
                 HasPendingEntryRequest = false,
                 HasPendingReturnRequest = false
             };
         }
 
+        /// <summary>
+        /// 상하차 구역의 활성 슬롯과 backlog 개수를 한 번에 반환합니다.
+        /// </summary>
         public static LoadingDockQueueSnapshot GetLoadingDockQueueSnapshot()
         {
             return new LoadingDockQueueSnapshot
             {
-                BacklogCount = _pendingRouteQueue.Count,
-                ActiveSlotCount = _pendingApprovalQueue.Count,
+                BacklogCount = _loadingDockBacklogQueue.Count,
+                ActiveSlotCount = _loadingDockActiveEntries.Count,
                 MaxActiveSlotCount = MaxLoadingDockActiveSlotCount,
-                TotalCount = _pendingApprovalQueue.Count + _pendingRouteQueue.Count
+                TotalCount = _loadingDockActiveEntries.Count + _loadingDockBacklogQueue.Count
             };
         }
 
+        /// <summary>
+        /// 상하차 슬롯에 현재 노출 중인 물류 목록을 슬롯 번호와 함께 반환합니다.
+        /// </summary>
         public static LoadingDockActiveCargoSlotSnapshot[] GetLoadingDockActiveCargoEntries()
         {
             var snapshots = new List<LoadingDockActiveCargoSlotSnapshot>();
-            var slotIndex = 0;
-            foreach (var approvalCargo in _pendingApprovalQueue)
+            for (var slotIndex = 0; slotIndex < _loadingDockActiveEntries.Count; slotIndex += 1)
             {
+                var approvalCargo = _loadingDockActiveEntries[slotIndex];
                 snapshots.Add(new LoadingDockActiveCargoSlotSnapshot
                 {
                     SlotIndex = slotIndex,
@@ -552,20 +697,18 @@ namespace ClikerSlash.Battle
                     Kind = approvalCargo.Kind,
                     Weight = approvalCargo.Weight
                 });
-                slotIndex += 1;
-                if (slotIndex >= MaxLoadingDockActiveSlotCount)
-                {
-                    break;
-                }
             }
 
             return snapshots.ToArray();
         }
 
+        /// <summary>
+        /// 활성 슬롯 뒤에서 대기 중인 상하차 backlog 물류 목록을 반환합니다.
+        /// </summary>
         public static LoadingDockCargoQueueEntry[] GetLoadingDockBacklogCargoEntries()
         {
             var entries = new List<LoadingDockCargoQueueEntry>();
-            foreach (var routeCargo in _pendingRouteQueue)
+            foreach (var routeCargo in _loadingDockBacklogQueue)
             {
                 entries.Add(new LoadingDockCargoQueueEntry
                 {
@@ -578,6 +721,9 @@ namespace ClikerSlash.Battle
             return entries.ToArray();
         }
 
+        /// <summary>
+        /// 새 상하차 물류를 기본 무게값으로 큐에 추가합니다.
+        /// </summary>
         public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind)
         {
             EnqueueLoadingDockCargo(kind, DefaultDeliveryLaneMaxWeight);
@@ -585,27 +731,53 @@ namespace ClikerSlash.Battle
 
         public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind, int weight)
         {
-            _pendingRouteQueue.Enqueue(new RouteSelectionCargoSnapshot
-            {
-                EntryId = _nextCargoEntryId++,
-                Kind = kind,
-                Weight = weight,
-                Reward = 60,
-                Penalty = 35,
-                ApprovalDecision = ApprovalDecision.Approve,
-                IsDeliverable = IsCargoDeliverable(weight)
-            });
+            EnqueueLoadingDockCargo(_nextCargoEntryId++, kind, weight);
         }
 
+        /// <summary>
+        /// 레인선택을 마친 물류를 상하차 구역 큐로 전달하고 빈 슬롯을 즉시 채웁니다.
+        /// </summary>
+        public static void EnqueueLoadingDockCargo(int entryId, LoadingDockCargoKind kind, int weight)
+        {
+            _loadingDockBacklogQueue.Enqueue(new LoadingDockCargoQueueEntry
+            {
+                EntryId = entryId > 0 ? entryId : _nextCargoEntryId++,
+                Kind = kind,
+                Weight = weight
+            });
+
+            PromoteLoadingDockBacklog();
+        }
+
+        /// <summary>
+        /// 클릭 또는 로봇 처리로 지정한 상하차 엔트리를 슬롯에서 제거합니다.
+        /// </summary>
         public static bool TryDeliverLoadingDockCargo(int entryId, out LoadingDockCargoQueueEntry deliveredEntry)
         {
             deliveredEntry = default;
+            for (var index = 0; index < _loadingDockActiveEntries.Count; index += 1)
+            {
+                if (_loadingDockActiveEntries[index].EntryId != entryId)
+                {
+                    continue;
+                }
+
+                deliveredEntry = _loadingDockActiveEntries[index];
+                _loadingDockActiveEntries.RemoveAt(index);
+                PromoteLoadingDockBacklog();
+                return true;
+            }
+
             return false;
         }
 
+        /// <summary>
+        /// 상하차 구역의 활성 슬롯과 backlog를 모두 비웁니다.
+        /// </summary>
         public static void ClearLoadingDockQueue()
         {
-            ClearRhythmQueues();
+            _loadingDockActiveEntries.Clear();
+            _loadingDockBacklogQueue.Clear();
         }
 
         public static bool TryRequestLoadingDockEntry(MetaProgressionCatalogAsset catalog, int physicalLaneCount = int.MaxValue)
@@ -635,21 +807,33 @@ namespace ClikerSlash.Battle
             return false;
         }
 
+        /// <summary>
+        /// 현재 프로토타입에서는 레인 이동형 조작을 사용하지 않으므로 항상 잠금 상태를 반환합니다.
+        /// </summary>
         public static bool IsLaneMovementLocked()
         {
-            return _currentMiniGamePhase == BattleMiniGamePhase.Approval;
+            return true;
         }
 
+        /// <summary>
+        /// 일시정지 메뉴를 열고 게임 시간을 멈춥니다.
+        /// </summary>
         public static void OpenPauseMenu()
         {
             ApplyPauseState(true);
         }
 
+        /// <summary>
+        /// 일시정지 메뉴를 닫고 게임 시간을 다시 흐르게 합니다.
+        /// </summary>
         public static void ClosePauseMenu()
         {
             ApplyPauseState(false);
         }
 
+        /// <summary>
+        /// 현재 일시정지 상태를 토글합니다.
+        /// </summary>
         public static void TogglePauseMenu()
         {
             ApplyPauseState(!IsPauseMenuOpen);
@@ -669,7 +853,35 @@ namespace ClikerSlash.Battle
         {
             _pendingApprovalQueue.Clear();
             _pendingRouteQueue.Clear();
+            _loadingDockBacklogQueue.Clear();
+            _loadingDockActiveEntries.Clear();
             _nextCargoEntryId = 1;
+        }
+
+        /// <summary>
+        /// 상하차 슬롯이 비어 있으면 backlog에서 앞 순서대로 채워 넣습니다.
+        /// </summary>
+        private static void PromoteLoadingDockBacklog()
+        {
+            while (_loadingDockActiveEntries.Count < MaxLoadingDockActiveSlotCount &&
+                   _loadingDockBacklogQueue.Count > 0)
+            {
+                _loadingDockActiveEntries.Add(_loadingDockBacklogQueue.Dequeue());
+            }
+        }
+
+        /// <summary>
+        /// 포커스 구역 값을 레거시 phase 표현으로 변환합니다.
+        /// </summary>
+        private static BattleMiniGamePhase ConvertAreaToPhase(BattleMiniGameArea area)
+        {
+            return area switch
+            {
+                BattleMiniGameArea.Approval => BattleMiniGamePhase.Approval,
+                BattleMiniGameArea.RouteSelection => BattleMiniGamePhase.RouteSelection,
+                BattleMiniGameArea.LoadingDock => BattleMiniGamePhase.LoadingDock,
+                _ => BattleMiniGamePhase.Completed
+            };
         }
 
         private static float CalculateWorkDuration(int healthLevel, float baseWorkDurationSeconds, float healthDurationBonusSeconds)

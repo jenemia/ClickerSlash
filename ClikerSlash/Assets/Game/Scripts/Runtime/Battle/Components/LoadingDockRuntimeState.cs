@@ -13,13 +13,24 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
-    /// 현재 진행 중인 메인 미니게임 phase입니다.
+    /// 플레이어가 현재 보고 있는 미니게임 구역입니다.
+    /// </summary>
+    public enum BattleMiniGameArea
+    {
+        Approval = 0,
+        RouteSelection = 1,
+        LoadingDock = 2
+    }
+
+    /// <summary>
+    /// ECS 물류 엔티티와 레거시 HUD가 함께 쓰는 미니게임 단계 값입니다.
     /// </summary>
     public enum BattleMiniGamePhase
     {
         Approval = 0,
         RouteSelection = 1,
-        Completed = 2
+        LoadingDock = 2,
+        Completed = 3
     }
 
     /// <summary>
@@ -45,14 +56,18 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
-    /// 현재 세션의 phase 진행 요약입니다.
+    /// 현재 세션의 동시 진행 구역 상태를 요약합니다.
     /// </summary>
     public struct BattleMiniGamePhaseSnapshot
     {
         public BattleMiniGamePhase CurrentPhase;
+        public BattleMiniGameArea FocusedArea;
         public bool HasActiveCargo;
+        public bool HasApprovalCargo;
+        public bool HasRouteCargo;
         public int PendingApprovalCount;
         public int PendingRouteCount;
+        public int PendingLoadingDockCount;
         public int DeliveryLaneMaxWeight;
     }
 

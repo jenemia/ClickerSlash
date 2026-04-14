@@ -100,7 +100,7 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
-    /// 현재 물류가 어느 미니게임 phase에 속하는지 저장합니다.
+    /// 현재 물류가 어느 판정 구역 컨베이어에 속하는지 저장합니다.
     /// </summary>
     public struct CargoMiniGamePhase : IComponentData
     {
@@ -220,11 +220,12 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
-    /// 다음 스폰 시각과 레인 선택용 난수 상태를 추적합니다.
+    /// 승인 컨베이어와 레인선택 컨베이어의 다음 스폰 시각을 각각 추적합니다.
     /// </summary>
     public struct SpawnTimerState : IComponentData
     {
-        public float Remaining;
+        public float ApprovalRemaining;
+        public float RouteRemaining;
         public Unity.Mathematics.Random Random;
     }
 
@@ -277,14 +278,20 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
-    /// 리듬 phase가 어느 지점에 있는지 ECS와 HUD가 함께 읽기 위한 싱글턴입니다.
+    /// 동시 진행 중인 세 구역의 포커스와 큐 상태를 ECS와 HUD가 함께 읽기 위한 싱글턴입니다.
     /// </summary>
     public struct RhythmPhaseState : IComponentData
     {
         public BattleMiniGamePhase CurrentPhase;
+        public BattleMiniGameArea FocusedArea;
         public int PendingApprovalCount;
         public int PendingRouteCount;
+        public int PendingLoadingDockCount;
         public byte HasActiveCargo;
+        // 0은 승인 컨베이어에 현재 활성 물류가 없는 상태, 1은 하나가 진행 중인 상태를 뜻합니다.
+        public byte HasActiveApprovalCargo;
+        // 0은 레인선택 컨베이어에 현재 활성 물류가 없는 상태, 1은 하나가 진행 중인 상태를 뜻합니다.
+        public byte HasActiveRouteCargo;
     }
 
     /// <summary>

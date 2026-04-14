@@ -7,21 +7,39 @@ using UnityEngine;
 
 namespace ClikerSlash.Battle
 {
-        /// <summary>
-        /// ECS의 현재 활성 물류를 프로토타입 씬의 단순 게임 오브젝트 뷰에 반영합니다.
-        /// 승인 phase는 보조 카메라, 레인선택 phase는 메인 레인 카메라를 사용합니다.
-        /// </summary>
+    /// <summary>
+    /// ECS 런타임 상태를 씬 뷰 오브젝트와 3구역 카메라 포커스에 반영합니다.
+    /// </summary>
     public sealed class BattlePresentationBridge : MonoBehaviour
     {
+        [Header("뷰 프리팹")]
+        [Tooltip("작업자와 보조 오브젝트에 사용할 기본 뷰 프리팹입니다.")]
         [SerializeField] private GameObject playerViewPrefab;
+        [Tooltip("물류 종류별 시각 프리팹 세트입니다.")]
         [SerializeField] private CargoVisualPrefabSet cargoVisualPrefabs;
+
+        [Header("씬 참조")]
+        [Tooltip("시네머신 브레인이 붙은 메인 카메라입니다.")]
         [SerializeField] private Camera sceneCamera;
+        [Tooltip("전투 레인과 메인 무대 배치 정보를 담는 authoring입니다.")]
         [SerializeField] private BattleViewAuthoring battleView;
+        [Tooltip("상하차 구역 앵커를 담는 authoring입니다.")]
         [SerializeField] private LoadingDockEnvironmentAuthoring loadingDockEnvironment;
+
+        [Header("가상 카메라")]
+        [Tooltip("승인 구역을 비추는 virtual camera입니다.")]
+        [SerializeField] private CinemachineCamera approvalVirtualCamera;
+        [Tooltip("레인선택 구역을 비추는 virtual camera입니다.")]
         [SerializeField] private CinemachineCamera laneVirtualCamera;
+        [Tooltip("상하차 구역을 비추는 virtual camera입니다.")]
         [SerializeField] private CinemachineCamera loadingDockVirtualCamera;
+
+        [Header("카메라 전환")]
+        [Tooltip("구역 카메라 전환 시 시네머신 블렌드 시간입니다.")]
         [SerializeField] [Min(0.05f)] private float loadingDockTransitionDuration = PrototypeSessionRuntime.DefaultLoadingDockTransitionDurationSeconds;
+        [Tooltip("비활성 카메라에 줄 우선순위입니다.")]
         [SerializeField] [Min(0)] private int standbyCameraPriority = 10;
+        [Tooltip("현재 포커스 카메라에 줄 우선순위입니다.")]
         [SerializeField] [Min(1)] private int liveCameraPriority = 20;
 
         private World _cachedWorld;
@@ -33,8 +51,11 @@ namespace ClikerSlash.Battle
         private GameObject _dockRobotInstance;
         private readonly Dictionary<Entity, GameObject> _cargoInstances = new();
         private bool _cameraRigInitialized;
-        private bool _dockCameraIsLive;
+        private BattleMiniGameArea _currentLiveArea = BattleMiniGameArea.Approval;
 
+        /// <summary>
+        /// 매 프레임 카메라 포커스와 ECS 뷰 동기화를 갱신합니다.
+        /// </summary>
         private void Update()
         {
             if (PrototypeSessionRuntime.IsPauseMenuOpen)
@@ -43,7 +64,7 @@ namespace ClikerSlash.Battle
             }
 
             PrototypeSessionRuntime.AdvanceLoadingDockTransition(Mathf.Max(Time.unscaledDeltaTime, 1f / 60f));
-            SyncLoadingDockCamera();
+            SyncFocusedCamera();
 
             if (!TryPrepareQueries(out var entityManager))
             {
@@ -64,16 +85,18 @@ namespace ClikerSlash.Battle
             Camera targetCamera,
             BattleViewAuthoring targetBattleView,
             LoadingDockEnvironmentAuthoring targetLoadingDockEnvironment = null,
+            CinemachineCamera targetApprovalVirtualCamera = null,
             CinemachineCamera targetLaneVirtualCamera = null,
             CinemachineCamera targetLoadingDockVirtualCamera = null)
         {
             sceneCamera = targetCamera;
             battleView = targetBattleView;
             loadingDockEnvironment = targetLoadingDockEnvironment;
+            approvalVirtualCamera = targetApprovalVirtualCamera;
             laneVirtualCamera = targetLaneVirtualCamera;
             loadingDockVirtualCamera = targetLoadingDockVirtualCamera;
             _cameraRigInitialized = false;
-            _dockCameraIsLive = false;
+            _currentLiveArea = BattleMiniGameArea.Approval;
             EnsureCameraRigInitialized();
         }
 
@@ -168,29 +191,33 @@ namespace ClikerSlash.Battle
             _laneRobotInstance.transform.position = transforms[0].Position;
         }
 
-        private void SyncLoadingDockCamera()
+        /// <summary>
+        /// 현재 포커스된 미니게임 구역 하나만 live priority를 가지도록 카메라를 갱신합니다.
+        /// </summary>
+        private void SyncFocusedCamera()
         {
             if (!EnsureCameraRigInitialized())
             {
                 return;
             }
 
-            var shouldUseDockCamera = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase == BattleMiniGamePhase.Approval;
-
-            if (_dockCameraIsLive == shouldUseDockCamera)
+            var focusedArea = PrototypeSessionRuntime.GetFocusedMiniGameArea();
+            if (_currentLiveArea == focusedArea)
             {
                 return;
             }
 
-            _dockCameraIsLive = shouldUseDockCamera;
-            laneVirtualCamera.Priority = shouldUseDockCamera ? standbyCameraPriority : liveCameraPriority;
-            loadingDockVirtualCamera.Priority = shouldUseDockCamera ? liveCameraPriority : standbyCameraPriority;
+            _currentLiveArea = focusedArea;
+            approvalVirtualCamera.Priority = focusedArea == BattleMiniGameArea.Approval ? liveCameraPriority : standbyCameraPriority;
+            laneVirtualCamera.Priority = focusedArea == BattleMiniGameArea.RouteSelection ? liveCameraPriority : standbyCameraPriority;
+            loadingDockVirtualCamera.Priority = focusedArea == BattleMiniGameArea.LoadingDock ? liveCameraPriority : standbyCameraPriority;
         }
 
         private bool EnsureCameraRigInitialized()
         {
             if (_cameraRigInitialized &&
                 sceneCamera != null &&
+                approvalVirtualCamera != null &&
                 laneVirtualCamera != null &&
                 loadingDockVirtualCamera != null)
             {
@@ -198,10 +225,12 @@ namespace ClikerSlash.Battle
             }
 
             sceneCamera ??= Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            approvalVirtualCamera ??= FindVirtualCamera("ApprovalVirtualCamera");
             laneVirtualCamera ??= FindVirtualCamera("LaneVirtualCamera");
             loadingDockVirtualCamera ??= FindVirtualCamera("LoadingDockVirtualCamera");
 
             if (sceneCamera == null ||
+                approvalVirtualCamera == null ||
                 laneVirtualCamera == null ||
                 loadingDockVirtualCamera == null)
             {
@@ -214,9 +243,14 @@ namespace ClikerSlash.Battle
                 Mathf.Max(0.05f, loadingDockTransitionDuration));
 
             _cameraRigInitialized = true;
-            _dockCameraIsLive = false;
-            laneVirtualCamera.Priority = liveCameraPriority;
+            _currentLiveArea = PrototypeSessionRuntime.GetFocusedMiniGameArea();
+            approvalVirtualCamera.Priority = _currentLiveArea == BattleMiniGameArea.Approval ? liveCameraPriority : standbyCameraPriority;
+            laneVirtualCamera.Priority = _currentLiveArea == BattleMiniGameArea.RouteSelection ? liveCameraPriority : standbyCameraPriority;
             loadingDockVirtualCamera.Priority = standbyCameraPriority;
+            if (_currentLiveArea == BattleMiniGameArea.LoadingDock)
+            {
+                loadingDockVirtualCamera.Priority = liveCameraPriority;
+            }
             return true;
         }
 
@@ -317,7 +351,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            var shouldShow = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase == BattleMiniGamePhase.Approval;
+            var shouldShow = PrototypeSessionRuntime.GetFocusedMiniGameArea() == BattleMiniGameArea.LoadingDock;
 
             if (_dockRobotInstance == null)
             {

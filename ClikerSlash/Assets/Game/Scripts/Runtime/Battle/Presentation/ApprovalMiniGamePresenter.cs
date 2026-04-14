@@ -6,12 +6,15 @@ using UnityEngine;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 승인 phase에서 현재 박스의 스티커와 저울 정보를 화면 우측에 표시합니다.
+    /// 승인 구역이 포커스일 때 현재 박스의 스티커와 저울 정보를 화면 우측에 표시합니다.
     /// </summary>
     public sealed class ApprovalMiniGamePresenter : MonoBehaviour
     {
         private GUIStyle _labelStyle;
 
+        /// <summary>
+        /// 승인 카메라를 보고 있을 때만 현재 승인 대상 박스 정보를 그립니다.
+        /// </summary>
         private void OnGUI()
         {
             var world = World.DefaultGameObjectInjectionWorld;
@@ -20,7 +23,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            if (PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase != BattleMiniGamePhase.Approval)
+            if (PrototypeSessionRuntime.GetFocusedMiniGameArea() != BattleMiniGameArea.Approval)
             {
                 return;
             }
@@ -62,6 +65,9 @@ namespace ClikerSlash.Battle
             }
         }
 
+        /// <summary>
+        /// 물류 분류 enum을 HUD에 노출할 문자열로 바꿉니다.
+        /// </summary>
         private static string DescribeCargoKind(LoadingDockCargoKind kind)
         {
             return kind switch
@@ -72,6 +78,9 @@ namespace ClikerSlash.Battle
             };
         }
 
+        /// <summary>
+        /// 승인 패널 전용 IMGUI 스타일을 지연 생성합니다.
+        /// </summary>
         private void EnsureStyles()
         {
             _labelStyle ??= new GUIStyle(GUI.skin.label)

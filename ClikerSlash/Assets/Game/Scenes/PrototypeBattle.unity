@@ -268,7 +268,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -382,7 +382,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4041bc6d823cf4d6d8ba123513860ca3, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.BattleSceneBootstrap
   battleConfigAuthoring: {fileID: 0}
   playerAuthoring: {fileID: 0}
@@ -399,7 +399,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 71b57400700c54ffca5c512aa9479b0d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.BattleConfigAuthoring
   BaseWorkDurationSeconds: 30
   HealthDurationBonusSeconds: 10
@@ -488,7 +488,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 0.85, b: 0.25, a: 1}
@@ -504,7 +504,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 56
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -550,6 +550,7 @@ GameObject:
   - component: {fileID: 353959824}
   - component: {fileID: 353959822}
   - component: {fileID: 353959823}
+  - component: {fileID: 353959825}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -589,10 +590,10 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.1
-  far clip plane: 100
+  far clip plane: 5000
   field of view: 34
   orthographic: 0
-  orthographic size: 5
+  orthographic size: 10
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -618,7 +619,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 72ece51f2901e7445ab60da3685d6b5f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineBrain
   ShowDebugText: 0
   ShowCameraFrustum: 1
@@ -655,6 +656,50 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &353959825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 353959821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
+  m_RenderShadows: 1
+  m_RequiresDepthTextureOption: 2
+  m_RequiresOpaqueTextureOption: 2
+  m_CameraType: 0
+  m_Cameras: []
+  m_RendererIndex: -1
+  m_VolumeLayerMask:
+    serializedVersion: 2
+    m_Bits: 1
+  m_VolumeTrigger: {fileID: 0}
+  m_VolumeFrameworkUpdateModeOption: 2
+  m_RenderPostProcessing: 0
+  m_Antialiasing: 0
+  m_AntialiasingQuality: 2
+  m_StopNaN: 0
+  m_Dithering: 0
+  m_ClearDepth: 1
+  m_AllowXRRendering: 1
+  m_AllowHDROutput: 1
+  m_UseScreenCoordOverride: 0
+  m_ScreenSizeOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_ScreenCoordScaleBias: {x: 0, y: 0, z: 0, w: 0}
+  m_RequiresDepthTexture: 0
+  m_RequiresColorTexture: 0
+  m_TaaSettings:
+    m_Quality: 3
+    m_FrameInfluence: 0.1
+    m_JitterScale: 1
+    m_MipBias: 0
+    m_VarianceClampScale: 0.9
+    m_ContrastAdaptiveSharpening: 0
+  m_Version: 2
 --- !u!1 &409433540
 GameObject:
   m_ObjectHideFlags: 0
@@ -683,7 +728,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RawImage
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -1038,6 +1083,7 @@ GameObject:
   m_Component:
   - component: {fileID: 456653369}
   - component: {fileID: 456653368}
+  - component: {fileID: 456653370}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -1125,6 +1171,35 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &456653370
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 456653367}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1 &501776686
 GameObject:
   m_ObjectHideFlags: 0
@@ -1153,7 +1228,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fb5894f7c83b6437ea6e83bd74c956d6, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.LoadingDockEnvironmentAuthoring
   cargoBayRoot: {fileID: 1839116471}
   truckBayRoot: {fileID: 1299062906}
@@ -1166,6 +1241,13 @@ MonoBehaviour:
   - {fileID: 2105507813}
   - {fileID: 1201866859}
   - {fileID: 451509079}
+  conveyorBeltRenderers: []
+  conveyorTexturePropertyName: _BaseMap
+  conveyorUvSpeedY: 0.388
+  globalCargoOffset: {x: 0, y: 0, z: 0}
+  standardCargoOffset: {x: 0, y: 0, z: 0}
+  fragileCargoOffset: {x: 0, y: 0, z: 0}
+  heavyCargoOffset: {x: 0, y: 0, z: 0}
 --- !u!4 &501776688
 Transform:
   m_ObjectHideFlags: 0
@@ -1198,7 +1280,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 198da6e54453d4802bbd40fbff0fd91b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.ApprovalEnvironmentAuthoring
   cargoSpawnAnchor: {fileID: 1338293809}
   judgmentAnchor: {fileID: 85565730}
@@ -1233,7 +1315,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -1312,7 +1394,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -1482,11 +1564,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0a026e7fe69c44b369ecc5cdb7a4ca49, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.PlayerAuthoring
   InitialLane: 2
-  Y: 0.6
-  Z: -3
 --- !u!4 &644500252
 Transform:
   m_ObjectHideFlags: 0
@@ -2010,7 +2090,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1bac73862936c43cea6295e6bb0a3a8b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.CargoAuthoring
   StandardWeight: 6
   FragileWeight: 6
@@ -2287,14 +2367,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineCamera
   Priority:
     Enabled: 1
     m_Value: 20
   OutputChannel: 1
   StandbyUpdate: 2
-  m_StreamingVersion: 0
+  m_StreamingVersion: 20241001
   m_LegacyPriority: 0
   Target:
     TrackingTarget: {fileID: 0}
@@ -2347,7 +2427,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc6928a21b8484c189e569956c3cc198, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.LaneLayoutAuthoring
   LaneWorldXs:
   - -8
@@ -2527,10 +2607,10 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1206059730}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4379c0a205f1e4d1ea8f4a213803fb2a, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.BattleAreaPreviewPresenter
   sceneCamera: {fileID: 353959822}
   laneVirtualCamera: {fileID: 1024714344}
@@ -2547,7 +2627,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5d514f49641494f518688ff2bb104a00, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.BattleHudPresenter
   infoText: {fileID: 53204871}
   laneText: {fileID: 556348692}
@@ -2563,7 +2643,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
   m_UiScaleMode: 1
   m_ReferencePixelsPerUnit: 100
@@ -2586,7 +2666,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GraphicRaycaster
   m_IgnoreReversedGraphics: 1
   m_BlockingObjects: 0
@@ -2814,7 +2894,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1366825144
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2845,7 +2925,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.08, g: 0.1, b: 0.14, a: 0.95}
@@ -2890,7 +2970,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1458409844
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2920,7 +3000,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -3100,14 +3180,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineCamera
   Priority:
     Enabled: 1
     m_Value: 10
   OutputChannel: 1
   StandbyUpdate: 2
-  m_StreamingVersion: 0
+  m_StreamingVersion: 20241001
   m_LegacyPriority: 0
   Target:
     TrackingTarget: {fileID: 0}
@@ -3586,6 +3666,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 2000000002}
   - {fileID: 1024714343}
   - {fileID: 1656331635}
   m_Father: {fileID: 0}
@@ -3600,7 +3681,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 737982fb0f7a642d8a12c66bf87f8e8b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.RouteLaneSelectionPresenter
 --- !u!114 &1921010107
 MonoBehaviour:
@@ -3612,7 +3693,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ae35eeeea856d4d4b98ea6a75f8a46e9, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.ApprovalMiniGamePresenter
 --- !u!114 &1921010108
 MonoBehaviour:
@@ -3624,7 +3705,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f012917c3c23744feadded967cf04203, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.BattlePresentationBridge
   playerViewPrefab: {fileID: 4746013424608966173, guid: 8b8353ec51b594112b4cf8ddfdf14b41, type: 3}
   cargoVisualPrefabs:
@@ -3634,6 +3715,7 @@ MonoBehaviour:
   sceneCamera: {fileID: 353959822}
   battleView: {fileID: 1954396511}
   loadingDockEnvironment: {fileID: 501776687}
+  approvalVirtualCamera: {fileID: 0}
   laneVirtualCamera: {fileID: 1024714344}
   loadingDockVirtualCamera: {fileID: 1656331634}
   loadingDockTransitionDuration: 0.35
@@ -3697,11 +3779,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5e6e0033bf22b4ee6bae3489fb3b4bdc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.BattleViewAuthoring
   CameraPosition: {x: 0, y: 10.6, z: -16.8}
   CameraRotation: {x: 31, y: 0, z: 0}
   CameraFieldOfView: 34
+  ApprovalCameraPosition: {x: 13.6, y: 10.4, z: -12.2}
+  ApprovalCameraRotation: {x: 35, y: 14, z: 0}
+  LoadingDockCameraPosition: {x: 13.64, y: 11.22, z: -9.6}
+  LoadingDockCameraRotation: {x: 39.583, y: 18, z: 0}
   LaneWorldXs:
   - -8
   - -4
@@ -3821,6 +3907,81 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1992820943}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &2000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2000000002}
+  - component: {fileID: 2000000003}
+  m_Layer: 0
+  m_Name: ApprovalVirtualCamera
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.2984644, y: 0.11622886, z: 0.03664682, w: 0.94660807}
+  m_LocalPosition: {x: 13.6, y: 10.4, z: -12.2}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1921010105}
+  m_LocalEulerAnglesHint: {x: 35, y: 14, z: 0}
+--- !u!114 &2000000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineCamera
+  Priority:
+    Enabled: 1
+    m_Value: 10
+  OutputChannel: 1
+  StandbyUpdate: 2
+  m_StreamingVersion: 20241001
+  m_LegacyPriority: 0
+  Target:
+    TrackingTarget: {fileID: 0}
+    LookAtTarget: {fileID: 0}
+    CustomLookAtTarget: 0
+  Lens:
+    FieldOfView: 34
+    OrthographicSize: 10
+    NearClipPlane: 0.1
+    FarClipPlane: 5000
+    Dutch: 0
+    ModeOverride: 0
+    PhysicalProperties:
+      GateFit: 2
+      SensorSize: {x: 21.946, y: 16.002}
+      LensShift: {x: 0, y: 0}
+      FocusDistance: 10
+      Iso: 200
+      ShutterSpeed: 0.005
+      Aperture: 16
+      BladeCount: 5
+      Curvature: {x: 2, y: 11}
+      BarrelClipping: 0.25
+      Anamorphism: 0
+  BlendHint: 0
 --- !u!1 &2105507812
 GameObject:
   m_ObjectHideFlags: 0
@@ -3890,8 +4051,8 @@ SceneRoots:
   - {fileID: 1954396512}
   - {fileID: 353959824}
   - {fileID: 456653369}
-  - {fileID: 1130207029}
   - {fileID: 501776688}
+  - {fileID: 1130207029}
   - {fileID: 90937912}
   - {fileID: 644500252}
   - {fileID: 916266704}

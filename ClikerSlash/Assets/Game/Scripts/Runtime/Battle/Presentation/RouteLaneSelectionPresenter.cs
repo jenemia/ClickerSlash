@@ -6,12 +6,15 @@ using UnityEngine;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 레인선택 phase에서 현재 박스의 승인 결과와 출력 라인 키 가이드를 보여줍니다.
+    /// 레인선택 구역이 포커스일 때 현재 박스의 승인 결과와 출력 라인 키 가이드를 보여줍니다.
     /// </summary>
     public sealed class RouteLaneSelectionPresenter : MonoBehaviour
     {
         private GUIStyle _labelStyle;
 
+        /// <summary>
+        /// 레인선택 카메라를 보고 있을 때만 현재 라우팅 대상 박스 정보를 그립니다.
+        /// </summary>
         private void OnGUI()
         {
             var world = World.DefaultGameObjectInjectionWorld;
@@ -20,7 +23,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            if (PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase != BattleMiniGamePhase.RouteSelection)
+            if (PrototypeSessionRuntime.GetFocusedMiniGameArea() != BattleMiniGameArea.RouteSelection)
             {
                 return;
             }
@@ -64,6 +67,9 @@ namespace ClikerSlash.Battle
             }
         }
 
+        /// <summary>
+        /// 물류 분류 enum을 HUD에 노출할 문자열로 바꿉니다.
+        /// </summary>
         private static string DescribeCargoKind(LoadingDockCargoKind kind)
         {
             return kind switch
@@ -74,6 +80,9 @@ namespace ClikerSlash.Battle
             };
         }
 
+        /// <summary>
+        /// 라우팅 패널 전용 IMGUI 스타일을 지연 생성합니다.
+        /// </summary>
         private void EnsureStyles()
         {
             _labelStyle ??= new GUIStyle(GUI.skin.label)

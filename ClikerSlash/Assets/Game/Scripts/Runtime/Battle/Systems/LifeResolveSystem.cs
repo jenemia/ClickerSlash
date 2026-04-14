@@ -58,12 +58,18 @@ namespace ClikerSlash.Battle
                 }
 
                 ecb.DestroyEntity(cargoEntity);
-                PrototypeSessionRuntime.NotifyActiveCargoResolved();
+                PrototypeSessionRuntime.NotifyAreaCargoResolved(cargoPhase.ValueRO.Value == BattleMiniGamePhase.Approval
+                    ? BattleMiniGameArea.Approval
+                    : BattleMiniGameArea.RouteSelection);
                 var runtimeSnapshot = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot();
                 rhythmPhaseState.ValueRW.CurrentPhase = runtimeSnapshot.CurrentPhase;
+                rhythmPhaseState.ValueRW.FocusedArea = runtimeSnapshot.FocusedArea;
                 rhythmPhaseState.ValueRW.PendingApprovalCount = runtimeSnapshot.PendingApprovalCount;
                 rhythmPhaseState.ValueRW.PendingRouteCount = runtimeSnapshot.PendingRouteCount;
+                rhythmPhaseState.ValueRW.PendingLoadingDockCount = runtimeSnapshot.PendingLoadingDockCount;
                 rhythmPhaseState.ValueRW.HasActiveCargo = runtimeSnapshot.HasActiveCargo ? (byte)1 : (byte)0;
+                rhythmPhaseState.ValueRW.HasActiveApprovalCargo = runtimeSnapshot.HasApprovalCargo ? (byte)1 : (byte)0;
+                rhythmPhaseState.ValueRW.HasActiveRouteCargo = runtimeSnapshot.HasRouteCargo ? (byte)1 : (byte)0;
             }
 
             ecb.Playback(entityManager);

@@ -63,7 +63,8 @@ namespace ClikerSlash.Battle
             });
             state.EntityManager.AddComponentData(configEntity, new SpawnTimerState
             {
-                Remaining = battleConfig.SpawnInterval,
+                ApprovalRemaining = battleConfig.SpawnInterval,
+                RouteRemaining = battleConfig.SpawnInterval,
                 Random = Unity.Mathematics.Random.CreateFromIndex(spawnPlanSeed)
             });
             state.EntityManager.AddComponentData(configEntity, new BattleOutcomeState
@@ -89,9 +90,13 @@ namespace ClikerSlash.Battle
             state.EntityManager.AddComponentData(configEntity, new RhythmPhaseState
             {
                 CurrentPhase = BattleMiniGamePhase.Approval,
+                FocusedArea = BattleMiniGameArea.Approval,
                 PendingApprovalCount = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().PendingApprovalCount,
                 PendingRouteCount = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().PendingRouteCount,
-                HasActiveCargo = 0
+                PendingLoadingDockCount = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().PendingLoadingDockCount,
+                HasActiveCargo = 0,
+                HasActiveApprovalCargo = 0,
+                HasActiveRouteCargo = 0
             });
             state.EntityManager.AddComponentData(configEntity, new WorkerProgressionStats
             {
@@ -145,7 +150,7 @@ namespace ClikerSlash.Battle
             state.EntityManager.AddComponentData(playerEntity, new MaxHandleWeight { Value = resolvedProgression.MaxHandleWeight });
             state.EntityManager.AddComponentData(playerEntity, new ComboState { Current = 0, Max = 0 });
             state.EntityManager.AddComponentData(playerEntity, LocalTransform.FromPositionRotationScale(
-                new float3(playerX, playerConfig.Y, playerConfig.Z),
+                new float3(playerX, playerConfig.WorldPosition.y, playerConfig.WorldPosition.z),
                 quaternion.identity,
                 1f));
             state.EntityManager.AddBuffer<LaneMoveCommandBufferElement>(playerEntity);

@@ -6,19 +6,27 @@ using UnityEngine.UI;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 현재 2단계 리듬 물류 루프의 phase, 통계, 입력 가이드를 HUD로 표시합니다.
+    /// 현재 3구역 동시 진행 물류 루프의 포커스, 통계, 입력 가이드를 HUD로 표시합니다.
     /// </summary>
     public sealed class BattleHudPresenter : MonoBehaviour
     {
+        [Header("HUD 참조")]
+        [Tooltip("좌측 정보 패널 텍스트입니다.")]
         [SerializeField] private Text infoText;
+        [Tooltip("상단 구역 상태 패널 텍스트입니다.")]
         [SerializeField] private Text laneText;
+        [Tooltip("세션 종료 결과 텍스트입니다.")]
         [SerializeField] private Text resultText;
+        [Tooltip("현재 구역 조작 키를 보여 주는 텍스트입니다.")]
         [SerializeField] private Text controlsText;
 
         private GUIStyle _labelStyle;
         private GUIStyle _buttonStyle;
         private GUIStyle _popupTitleStyle;
 
+        /// <summary>
+        /// 씬 빌더가 생성한 HUD 텍스트 참조를 프레젠터에 연결합니다.
+        /// </summary>
         public void Bind(Text info, Text lane, Text result, Text controls)
         {
             infoText = info;
@@ -27,6 +35,9 @@ namespace ClikerSlash.Battle
             controlsText = controls;
         }
 
+        /// <summary>
+        /// 매 프레임 전투 통계와 현재 포커스 구역을 읽어 HUD 문자열을 다시 그립니다.
+        /// </summary>
         private void Update()
         {
             var world = World.DefaultGameObjectInjectionWorld;
@@ -54,12 +65,12 @@ namespace ClikerSlash.Battle
             HandlePauseInput(outcome);
 
             infoText.text =
-                $"Work {stage.RemainingWorkTime:0.0}s\nIncome {stats.TotalMoney}\nApproved {stats.ApprovedCargoCount}\nRejected {stats.RejectedCargoCount}";
+                $"Work {stage.RemainingWorkTime:0.0}s\nIncome {stats.TotalMoney}\nApproved {stats.ApprovedCargoCount}\nRejected {stats.RejectedCargoCount}\nDock Queue {phaseState.PendingLoadingDockCount}";
             laneText.text =
-                $"Phase {DescribePhase(phaseState.CurrentPhase)}\nPending Approval {phaseState.PendingApprovalCount}\nPending Route {phaseState.PendingRouteCount}\nCorrect {stats.CorrectRouteCount} / Misroute {stats.MisrouteCount} / Return {stats.ReturnCount}";
+                $"Focus {DescribeArea(phaseState.FocusedArea)}\nPending Approval {phaseState.PendingApprovalCount}\nPending Route {phaseState.PendingRouteCount}\nPending Dock {phaseState.PendingLoadingDockCount}\nCorrect {stats.CorrectRouteCount} / Misroute {stats.MisrouteCount} / Return {stats.ReturnCount}";
             if (controlsText != null)
             {
-                controlsText.text = BuildControlsText(phaseState.CurrentPhase);
+                controlsText.text = BuildControlsText(phaseState.FocusedArea);
             }
 
             if (outcome.HasOutcome == 0)
@@ -72,6 +83,9 @@ namespace ClikerSlash.Battle
             resultText.gameObject.SetActive(true);
         }
 
+        /// <summary>
+        /// 진행 중 세션에서만 ESC 일시정지 입력을 처리합니다.
+        /// </summary>
         private static void HandlePauseInput(BattleOutcomeState outcome)
         {
             if (outcome.HasOutcome != 0)
@@ -88,26 +102,37 @@ namespace ClikerSlash.Battle
             PrototypeSessionRuntime.TogglePauseMenu();
         }
 
-        private static string BuildControlsText(BattleMiniGamePhase phase)
+        /// <summary>
+        /// 현재 포커스된 구역에 맞는 키 가이드를 생성합니다.
+        /// </summary>
+        private static string BuildControlsText(BattleMiniGameArea area)
         {
-            return phase switch
+            return area switch
             {
-                BattleMiniGamePhase.Approval => "Approval: Z = Reject / X = Approve / Esc = Pause",
-                BattleMiniGamePhase.RouteSelection => "Route: 1 Air / 2 Sea / 3 Rail / 4 Truck / 5 Return / Esc = Pause",
-                _ => "Esc = Pause"
+                BattleMiniGameArea.Approval => "Q/E Camera  Z Reject  X Approve  Esc Pause",
+                BattleMiniGameArea.RouteSelection => "Q/E Camera  1 Air  2 Sea  3 Rail  4 Truck  5 Return  Esc Pause",
+                BattleMiniGameArea.LoadingDock => "Q/E Camera  Mouse Deliver  Esc Pause",
+                _ => "Q/E Camera  Esc Pause"
             };
         }
 
-        private static string DescribePhase(BattleMiniGamePhase phase)
+        /// <summary>
+        /// 포커스 구역 이름을 HUD 친화 문자열로 변환합니다.
+        /// </summary>
+        private static string DescribeArea(BattleMiniGameArea area)
         {
-            return phase switch
+            return area switch
             {
-                BattleMiniGamePhase.Approval => "Approval",
-                BattleMiniGamePhase.RouteSelection => "Route Selection",
-                _ => "Completed"
+                BattleMiniGameArea.Approval => "Approval",
+                BattleMiniGameArea.RouteSelection => "Route Selection",
+                BattleMiniGameArea.LoadingDock => "Loading Dock",
+                _ => "Unknown"
             };
         }
 
+        /// <summary>
+        /// 세션 종료 이후에는 허브 복귀 팝업을 IMGUI로 표시합니다.
+        /// </summary>
         private void OnGUI()
         {
             var world = World.DefaultGameObjectInjectionWorld;
@@ -163,6 +188,9 @@ namespace ClikerSlash.Battle
             GUILayout.EndArea();
         }
 
+        /// <summary>
+        /// 전투 중 ESC로 연 일시정지 팝업을 렌더링합니다.
+        /// </summary>
         private void DrawPausePopup()
         {
             EnsureStyles();
@@ -197,6 +225,9 @@ namespace ClikerSlash.Battle
             GUILayout.EndArea();
         }
 
+        /// <summary>
+        /// IMGUI 스타일 객체를 한 번만 생성해 재사용합니다.
+        /// </summary>
         private void EnsureStyles()
         {
             if (_labelStyle != null)
