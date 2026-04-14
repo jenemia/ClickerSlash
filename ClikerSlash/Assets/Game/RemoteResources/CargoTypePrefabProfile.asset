@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 030d32cf472d4cd98a5f34b41e84a52f, type: 3}
+  m_Name: CargoTypePrefabProfile
+  m_EditorClassIdentifier: ClikerSlash.Battle.Runtime::ClikerSlash.Battle.CargoTypePrefabProfile
+  standardPrefabs:
+  - {fileID: 8977454267680600631, guid: a593644b726d3499787fbdcc4516f904, type: 3}
+  fragilePrefabs:
+  - {fileID: 7293252324518916424, guid: ee8c98a00c97a4777971566bb964ba78, type: 3}
+  heavyPrefabs:
+  - {fileID: 1478083797707854081, guid: 9710e09523ff140c9a2944d8952f5948, type: 3}
