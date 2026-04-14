@@ -15,7 +15,6 @@ namespace ClikerSlash.Battle
     {
         [SerializeField] private GameObject playerViewPrefab;
         [SerializeField] private GameObject supportRobotViewPrefab;
-        [SerializeField] private CargoVisualPrefabSet cargoVisualPrefabs;
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private BattleViewAuthoring battleView;
         [SerializeField] private LoadingDockEnvironmentAuthoring loadingDockEnvironment;
@@ -37,14 +36,25 @@ namespace ClikerSlash.Battle
         private GameObject _laneRobotInstance;
         private GameObject _dockRobotInstance;
         private readonly Dictionary<Entity, GameObject> _cargoInstances = new();
+        private readonly HashSet<int> _missingLaneCargoPrefabLogKeys = new();
         private bool _cameraRigInitialized;
         private bool _dockCameraIsLive;
 
+        /// <summary>
+        /// 현재 ECS 상태와 authoritative 환경 바인딩 결과를 읽어 레인/상하차 뷰를 매 프레임 동기화합니다.
+        /// </summary>
         private void Update()
         {
             if (PrototypeSessionRuntime.IsPauseMenuOpen)
             {
                 return;
+            }
+
+            // authoritative Env가 바뀌면 기존 직렬화 참조보다 런타임 바인딩 결과를 우선합니다.
+            if (BattleEnvironmentBindingRuntime.CurrentEnvironment != null &&
+                loadingDockEnvironment != BattleEnvironmentBindingRuntime.CurrentEnvironment)
+            {
+                loadingDockEnvironment = BattleEnvironmentBindingRuntime.CurrentEnvironment;
             }
 
             PrototypeSessionRuntime.AdvanceLoadingDockTransition(Mathf.Max(Time.unscaledDeltaTime, 1f / 60f));
@@ -83,18 +93,25 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
-        /// 레인과 상하차가 공유하는 물류 프리팹 세트를 명시적으로 연결합니다.
+        /// additive Env 씬이 준비된 뒤 상하차 환경 참조만 다시 연결합니다.
         /// </summary>
-        public void BindVisualPrefabs(
+        public void BindLoadingDockEnvironment(LoadingDockEnvironmentAuthoring targetLoadingDockEnvironment)
+        {
+            loadingDockEnvironment = targetLoadingDockEnvironment;
+        }
+
+        /// <summary>
+        /// 레인/도크 actor 뷰 프리팹만 명시적으로 연결합니다.
+        /// 레인 cargo 외형은 Env profile 또는 기본 Resources가 책임집니다.
+        /// </summary>
+        public void BindActorVisualPrefabs(
             GameObject targetPlayerViewPrefab,
-            CargoVisualPrefabSet targetCargoVisualPrefabs,
             GameObject targetSupportRobotViewPrefab = null)
         {
             playerViewPrefab = targetPlayerViewPrefab;
             supportRobotViewPrefab = targetSupportRobotViewPrefab != null
                 ? targetSupportRobotViewPrefab
                 : targetPlayerViewPrefab;
-            cargoVisualPrefabs = targetCargoVisualPrefabs;
         }
 
         private bool TryPrepareQueries(out EntityManager entityManager)
@@ -120,6 +137,8 @@ namespace ClikerSlash.Battle
             _cargoQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<CargoTag>(),
                 ComponentType.ReadOnly<CargoKind>(),
+                ComponentType.ReadOnly<CargoPrefabVariant>(),
+                ComponentType.ReadOnly<CargoRevealDelay>(),
                 ComponentType.ReadOnly<LocalTransform>());
             _laneRobotQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<LaneRobotTag>(),
@@ -280,23 +299,54 @@ namespace ClikerSlash.Battle
             });
         }
 
-        private void SyncCargo(EntityManager entityManager)
+        /// <summary>
+        /// Env 프로파일과 기본 Resources만 사용해 레인 cargo prefab을 해석합니다.
+        /// </summary>
+        private GameObject ResolveLaneCargoPrefab(LoadingDockCargoKind kind, int variantId)
         {
-            if (cargoVisualPrefabs == null || !cargoVisualPrefabs.IsComplete)
+            var envProfile = loadingDockEnvironment != null ? loadingDockEnvironment.GetLaneCargoPrefabProfile() : null;
+            if (envProfile != null)
             {
-                return;
+                var prefab = envProfile.ResolvePrefab(kind, variantId);
+                if (prefab != null)
+                {
+                    return prefab;
+                }
             }
 
+            var defaultPrefab = CargoTypePrefabProfile.ResolveDefaultPrefab(kind, variantId);
+            if (defaultPrefab != null)
+            {
+                return defaultPrefab;
+            }
+
+            LogMissingLaneCargoPrefabOnce(kind, variantId);
+            return null;
+        }
+
+        /// <summary>
+        /// reveal이 끝난 cargo만 실제 레인 뷰로 보이게 동기화합니다.
+        /// </summary>
+        private void SyncCargo(EntityManager entityManager)
+        {
             using var entities = _cargoQuery.ToEntityArray(Allocator.Temp);
             using var kinds = _cargoQuery.ToComponentDataArray<CargoKind>(Allocator.Temp);
+            using var variants = _cargoQuery.ToComponentDataArray<CargoPrefabVariant>(Allocator.Temp);
+            using var revealDelays = _cargoQuery.ToComponentDataArray<CargoRevealDelay>(Allocator.Temp);
             using var transforms = _cargoQuery.ToComponentDataArray<LocalTransform>(Allocator.Temp);
             var alive = new HashSet<Entity>();
 
             for (var i = 0; i < entities.Length; i++)
             {
                 var cargoEntity = entities[i];
+                if (revealDelays[i].RemainingSeconds > 0f)
+                {
+                    // 팔레트 -> 레일 handoff가 끝나기 전에는 본 레인 뷰를 아직 보여주지 않습니다.
+                    continue;
+                }
+
                 alive.Add(cargoEntity);
-                var prefab = cargoVisualPrefabs.Resolve(kinds[i].Value);
+                var prefab = ResolveLaneCargoPrefab(kinds[i].Value, variants[i].Value);
                 if (prefab == null)
                 {
                     continue;
@@ -327,6 +377,7 @@ namespace ClikerSlash.Battle
                     continue;
                 }
 
+                // 더 이상 ECS에 존재하지 않거나 reveal 중으로 돌아간 뷰는 제거합니다.
                 if (pair.Value != null)
                 {
                     Destroy(pair.Value);
@@ -372,9 +423,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            var anchor = loadingDockEnvironment.dockRobotAnchor != null
-                ? loadingDockEnvironment.dockRobotAnchor
-                : loadingDockEnvironment.truckDropZone;
+            var anchor = loadingDockEnvironment.dockRobotAnchor;
             if (anchor != null)
             {
                 _dockRobotInstance.transform.position = anchor.position;
@@ -503,11 +552,29 @@ namespace ClikerSlash.Battle
                 Destroy(_dockRobotInstance);
                 _dockRobotInstance = null;
             }
+
+            _missingLaneCargoPrefabLogKeys.Clear();
         }
 
         private void OnDisable()
         {
             CleanupAllViews();
+        }
+
+        /// <summary>
+        /// Env profile과 기본 Resources 모두 비어 있을 때 같은 kind/variant 조합의 오류를 한 번만 기록합니다.
+        /// </summary>
+        private void LogMissingLaneCargoPrefabOnce(LoadingDockCargoKind kind, int variantId)
+        {
+            var logKey = ((int)kind << 16) ^ variantId;
+            if (!_missingLaneCargoPrefabLogKeys.Add(logKey))
+            {
+                return;
+            }
+
+            Debug.LogError(
+                $"BattlePresentationBridge: 레인 cargo prefab을 찾을 수 없습니다. kind={kind}, variantId={variantId}, envProfile={loadingDockEnvironment?.laneCargoPrefabProfile}",
+                loadingDockEnvironment != null ? loadingDockEnvironment : this);
         }
 
         private static class ListPool<T>

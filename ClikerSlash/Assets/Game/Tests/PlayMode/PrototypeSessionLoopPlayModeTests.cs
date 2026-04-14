@@ -667,19 +667,10 @@ namespace ClikerSlash.Tests.PlayMode
 
             var loadingDockEnvironmentObject = new GameObject("LoadingDockEnvironment");
             var loadingDockEnvironment = loadingDockEnvironmentObject.AddComponent<LoadingDockEnvironmentAuthoring>();
-            var cargoBayRoot = new GameObject("CargoBayRoot").transform;
-            cargoBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
-            cargoBayRoot.localPosition = new Vector3(-5f, 0f, -1.8f);
-            loadingDockEnvironment.cargoBayRoot = cargoBayRoot;
-
             var truckBayRoot = new GameObject("TruckBayRoot").transform;
             truckBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
             truckBayRoot.localPosition = new Vector3(5f, 0f, 1.8f);
             loadingDockEnvironment.truckBayRoot = truckBayRoot;
-
-            var truckDropZone = new GameObject("TruckDropZone").transform;
-            truckDropZone.SetParent(truckBayRoot, false);
-            loadingDockEnvironment.truckDropZone = truckDropZone;
 
             var laneVirtualCamera = CreatePassiveVirtualCamera(
                 "LaneVirtualCamera",
@@ -753,8 +744,6 @@ namespace ClikerSlash.Tests.PlayMode
 
             var loadingDockEnvironmentObject = new GameObject("LoadingDockEnvironment");
             var loadingDockEnvironment = loadingDockEnvironmentObject.AddComponent<LoadingDockEnvironmentAuthoring>();
-            loadingDockEnvironment.cargoBayRoot = new GameObject("CargoBayRoot").transform;
-            loadingDockEnvironment.cargoBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
             loadingDockEnvironment.truckBayRoot = new GameObject("TruckBayRoot").transform;
             loadingDockEnvironment.truckBayRoot.SetParent(loadingDockEnvironmentObject.transform, false);
 
@@ -948,21 +937,26 @@ namespace ClikerSlash.Tests.PlayMode
 
             var loadingDockEnvironment = Object.FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
             Assert.That(loadingDockEnvironment, Is.Not.Null);
-            Assert.That(loadingDockEnvironment.cargoBayRoot, Is.Not.Null);
             Assert.That(loadingDockEnvironment.truckBayRoot, Is.Not.Null);
-            Assert.That(loadingDockEnvironment.cargoThrowOrigin, Is.Not.Null);
-            Assert.That(loadingDockEnvironment.truckDropZone, Is.Not.Null);
             Assert.That(loadingDockEnvironment.dockRobotAnchor, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.palletStackAnchor, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.transientCargoRoot, Is.Not.Null);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors, Is.Not.Null);
-            Assert.That(loadingDockEnvironment.GetConveyorBeltRenderers(), Is.Not.Empty);
+            Assert.That(loadingDockEnvironment.laneEntryAnchors, Is.Not.Null);
+            Assert.That(loadingDockEnvironment.conveyorBeltRenderers, Is.Not.Empty);
             Assert.That(loadingDockEnvironment.cargoSlotAnchors.Length, Is.EqualTo(PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount));
             foreach (var slotAnchor in loadingDockEnvironment.cargoSlotAnchors)
             {
                 Assert.That(slotAnchor, Is.Not.Null);
             }
+            Assert.That(loadingDockEnvironment.laneEntryAnchors.Length, Is.EqualTo(6));
+            foreach (var laneEntryAnchor in loadingDockEnvironment.laneEntryAnchors)
+            {
+                Assert.That(laneEntryAnchor, Is.Not.Null);
+            }
             Assert.That(
                 Vector3.Distance(
-                    loadingDockEnvironment.cargoBayRoot.position,
+                    loadingDockEnvironment.palletStackAnchor.position,
                     loadingDockEnvironment.truckBayRoot.position),
                 Is.GreaterThan(6f));
         }
@@ -1009,7 +1003,7 @@ namespace ClikerSlash.Tests.PlayMode
                 120);
             Assert.That(brain.ActiveVirtualCamera, Is.SameAs(activeDockCamera));
 
-            var cargoViewport = mainCamera.WorldToViewportPoint(environment.cargoBayRoot.position);
+            var cargoViewport = mainCamera.WorldToViewportPoint(environment.palletStackAnchor.position);
             var truckViewport = mainCamera.WorldToViewportPoint(environment.truckBayRoot.position);
             Assert.That(IsInsideViewport(cargoViewport), Is.True);
             Assert.That(IsInsideViewport(truckViewport), Is.True);
@@ -1221,7 +1215,7 @@ namespace ClikerSlash.Tests.PlayMode
 
             var cargoTransform = cargoViewRoot.GetChild(0);
             var initialCargoPosition = cargoTransform.position;
-            var beltRenderers = environment.GetConveyorBeltRenderers();
+            var beltRenderers = environment.conveyorBeltRenderers;
             Assert.That(beltRenderers, Is.Not.Empty);
             var activeBeltRenderer = FindRendererForLane(beltRenderers, 3);
             var inactiveBeltRenderer = FindRendererForLane(beltRenderers, 1);

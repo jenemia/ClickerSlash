@@ -41,7 +41,13 @@ namespace ClikerSlash.Battle
         /// </summary>
         private void Update()
         {
-            environment ??= FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            // 바인더가 authoritative 환경을 결정한 뒤에는 그 결과를 계속 우선 사용합니다.
+            if (BattleEnvironmentBindingRuntime.CurrentEnvironment != null &&
+                environment != BattleEnvironmentBindingRuntime.CurrentEnvironment)
+            {
+                environment = BattleEnvironmentBindingRuntime.CurrentEnvironment;
+            }
+
             if (environment == null)
             {
                 return;
@@ -96,7 +102,8 @@ namespace ClikerSlash.Battle
             _cachedTexturePropertyName = texturePropertyName;
             _cachedTextureStPropertyId = Shader.PropertyToID($"{texturePropertyName}_ST");
 
-            foreach (var renderer in environment.GetConveyorBeltRenderers())
+            // 컨베이어 렌더러도 strict contract의 일부라서, inspector에 연결된 목록만 사용합니다.
+            foreach (var renderer in environment.conveyorBeltRenderers)
             {
                 if (renderer == null)
                 {

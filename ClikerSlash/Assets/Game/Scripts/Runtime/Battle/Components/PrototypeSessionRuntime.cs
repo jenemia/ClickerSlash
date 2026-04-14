@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace ClikerSlash.Battle
@@ -14,6 +15,16 @@ namespace ClikerSlash.Battle
         public int CurrentCombo;
         public int MaxCombo;
         public float WorkedTimeSeconds;
+    }
+
+    /// <summary>
+    /// 레인에 스폰될 상자의 순서, 타입, 프리팹 variant를 함께 고정한 런타임 엔트리입니다.
+    /// </summary>
+    public struct LaneCargoSpawnEntry
+    {
+        public int SpawnIndex;
+        public LoadingDockCargoKind Kind;
+        public int PrefabVariantId;
     }
 
     /// <summary>
@@ -45,6 +56,7 @@ namespace ClikerSlash.Battle
         private static bool _hasInstalledDockRobot;
         private static readonly Queue<LoadingDockCargoQueueEntry> _loadingDockBacklogQueue = new();
         private static readonly LoadingDockCargoQueueEntry?[] _loadingDockActiveSlots = new LoadingDockCargoQueueEntry?[MaxLoadingDockActiveSlotCount];
+        private static readonly Queue<LaneCargoSpawnEntry> _laneCargoSpawnPlan = new();
         private static int _nextLoadingDockCargoEntryId = 1;
 
         private static MetaProgressionRuntimeState _metaProgressionRuntimeState;
@@ -214,6 +226,70 @@ namespace ClikerSlash.Battle
         }
 
         /// <summary>
+        /// 이번 세션에 아직 레인으로 올라오지 않은 물류 스폰 계획 복사본을 반환합니다.
+        /// </summary>
+        public static LaneCargoSpawnEntry[] GetRemainingLaneCargoSpawnEntries()
+        {
+            return _laneCargoSpawnPlan.ToArray();
+        }
+
+        /// <summary>
+        /// 세션 시작 시점에 전체 작업 시간을 기준으로 레인 스폰 계획을 미리 고정합니다.
+        /// </summary>
+        public static void InitializeLaneCargoSpawnPlan(float resolvedWorkDurationSeconds, float spawnIntervalSeconds, uint randomSeed)
+        {
+            ClearLaneCargoSpawnPlan();
+
+            // 스폰 간격이 너무 작아지는 경우를 막아 세션 길이 계산이 불안정해지지 않게 합니다.
+            var safeInterval = Mathf.Max(0.05f, spawnIntervalSeconds);
+            var totalSpawnCount = Mathf.Max(0, Mathf.CeilToInt(resolvedWorkDurationSeconds / safeInterval));
+            var resolvedSeed = randomSeed == 0u ? 1u : randomSeed;
+            var random = Unity.Mathematics.Random.CreateFromIndex(resolvedSeed);
+
+            for (var spawnIndex = 0; spawnIndex < totalSpawnCount; spawnIndex += 1)
+            {
+                var kind = (LoadingDockCargoKind)random.NextInt(0, 3);
+                var prefabVariantId = kind switch
+                {
+                    LoadingDockCargoKind.Fragile => 0,
+                    LoadingDockCargoKind.Heavy => random.NextInt(0, CargoTypePrefabProfile.GetDefaultVariantCount(kind)),
+                    _ => 0
+                };
+
+                _laneCargoSpawnPlan.Enqueue(new LaneCargoSpawnEntry
+                {
+                    SpawnIndex = spawnIndex,
+                    Kind = kind,
+                    PrefabVariantId = prefabVariantId
+                });
+            }
+        }
+
+        /// <summary>
+        /// 다음 레인 물류 스폰 엔트리를 소비합니다.
+        /// </summary>
+        public static bool TryConsumeNextLaneCargoSpawn(out LaneCargoSpawnEntry entry)
+        {
+            if (_laneCargoSpawnPlan.Count > 0)
+            {
+                // 스폰 순서를 큐로 고정해 팔레트 적재 순번과 실제 전투 스폰 순번을 일치시킵니다.
+                entry = _laneCargoSpawnPlan.Dequeue();
+                return true;
+            }
+
+            entry = default;
+            return false;
+        }
+
+        /// <summary>
+        /// 레인 물류 스폰 계획을 모두 비웁니다.
+        /// </summary>
+        public static void ClearLaneCargoSpawnPlan()
+        {
+            _laneCargoSpawnPlan.Clear();
+        }
+
+        /// <summary>
         /// 레인에서 성공 처리된 물류를 상하차 세션 큐에 적재합니다.
         /// </summary>
         public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind)
@@ -242,6 +318,7 @@ namespace ClikerSlash.Battle
             var emptySlotIndex = FindFirstEmptyLoadingDockSlotIndex();
             if (emptySlotIndex >= 0)
             {
+                // 빈 활성 슬롯이 있으면 backlog를 거치지 않고 바로 화면에 올립니다.
                 _loadingDockActiveSlots[emptySlotIndex] = queueEntry;
                 return;
             }
@@ -272,6 +349,7 @@ namespace ClikerSlash.Battle
                 _loadingDockActiveSlots[slotIndex] = null;
                 if (_loadingDockBacklogQueue.Count > 0)
                 {
+                    // 처리 직후 backlog를 바로 당겨와 활성 슬롯 수를 최대한 유지합니다.
                     _loadingDockActiveSlots[slotIndex] = _loadingDockBacklogQueue.Dequeue();
                 }
 
@@ -345,6 +423,7 @@ namespace ClikerSlash.Battle
             HasLastBattleResult = false;
             LastBattleResult = default;
             ClearLoadingDockQueue();
+            ClearLaneCargoSpawnPlan();
             ResolvedWorkDurationSeconds = 0f;
             HasPendingBattleEntryRequest = false;
             _currentWorkArea = WorkAreaType.Lane;
@@ -461,6 +540,7 @@ namespace ClikerSlash.Battle
         {
             ClosePauseMenu();
             ClearLoadingDockQueue();
+            ClearLaneCargoSpawnPlan();
             HasPendingBattleEntryRequest = true;
         }
 

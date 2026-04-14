@@ -15,6 +15,7 @@ namespace ClikerSlash.Battle
         {
             PrototypeSessionRuntime.ClosePauseMenu();
             PrototypeSessionRuntime.ClearLoadingDockQueue();
+            PrototypeSessionRuntime.ClearLaneCargoSpawnPlan();
             SceneManager.LoadScene(PrototypeSessionRuntime.HubSceneName);
         }
 

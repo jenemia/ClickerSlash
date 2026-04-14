@@ -48,6 +48,17 @@ namespace ClikerSlash.Battle
             var resolvedWorkDuration = PrototypeSessionRuntime.ResolveWorkDuration(
                 battleConfig.BaseWorkDurationSeconds,
                 battleConfig.HealthDurationBonusSeconds);
+            var spawnPlanSeed = (uint)System.DateTime.UtcNow.Ticks;
+            if (spawnPlanSeed == 0u)
+            {
+                spawnPlanSeed = 1u;
+            }
+
+            // 전투 시작 시점에 전체 레인 스폰 순서를 먼저 고정해 팔레트 재고와 실제 스폰이 어긋나지 않게 합니다.
+            PrototypeSessionRuntime.InitializeLaneCargoSpawnPlan(
+                resolvedWorkDuration,
+                battleConfig.SpawnInterval,
+                spawnPlanSeed);
 
             state.EntityManager.AddComponentData(configEntity, new StageProgressState
             {
@@ -58,7 +69,7 @@ namespace ClikerSlash.Battle
             state.EntityManager.AddComponentData(configEntity, new SpawnTimerState
             {
                 Remaining = battleConfig.SpawnInterval,
-                Random = Unity.Mathematics.Random.CreateFromIndex(0x00C0FFEEu)
+                Random = Unity.Mathematics.Random.CreateFromIndex(spawnPlanSeed)
             });
             state.EntityManager.AddComponentData(configEntity, new BattleOutcomeState
             {

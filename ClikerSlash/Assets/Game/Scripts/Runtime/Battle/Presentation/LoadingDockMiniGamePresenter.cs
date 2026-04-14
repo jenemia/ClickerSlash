@@ -13,7 +13,6 @@ namespace ClikerSlash.Battle
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private LoadingDockEnvironmentAuthoring environment;
         [SerializeField] private CargoVisualPrefabSet cargoVisualPrefabs;
-        [SerializeField] [Min(0.1f)] private float fallbackSlotSpacing = 1.9f;
 
         private readonly Dictionary<int, LoadingDockCargoView> _cargoViews = new();
         private readonly Dictionary<int, int> _slotByEntryId = new();
@@ -43,10 +42,27 @@ namespace ClikerSlash.Battle
             _cargoViewPool.Configure(cargoVisualPrefabs);
         }
 
+        /// <summary>
+        /// additive Env 씬의 environment facade만 다시 연결합니다.
+        /// </summary>
+        public void BindEnvironment(LoadingDockEnvironmentAuthoring targetEnvironment)
+        {
+            environment = targetEnvironment;
+        }
+
+        /// <summary>
+        /// 상하차 화면의 활성 상태에 따라 슬롯 뷰, 로봇 처리, 입력 처리를 갱신합니다.
+        /// </summary>
         private void Update()
         {
             sceneCamera ??= Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
-            environment ??= FindFirstObjectByType<LoadingDockEnvironmentAuthoring>();
+            // 런타임 바인더가 authoritative Env를 확정했다면 그 결과를 즉시 반영합니다.
+            if (BattleEnvironmentBindingRuntime.CurrentEnvironment != null &&
+                environment != BattleEnvironmentBindingRuntime.CurrentEnvironment)
+            {
+                environment = BattleEnvironmentBindingRuntime.CurrentEnvironment;
+            }
+
             if (sceneCamera == null || environment == null)
             {
                 ClearCargoViews();
@@ -58,6 +74,7 @@ namespace ClikerSlash.Battle
             var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
             var isLoadingDockActive = loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
                                       loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+            // 슬롯 물류는 상하차 화면 진입 여부와 상관없이 항상 최신 상태로 유지합니다.
             SyncVisibleCargoViews();
             _wasLoadingDockActive = isLoadingDockActive;
             if (isLoadingDockActive)
@@ -234,25 +251,9 @@ namespace ClikerSlash.Battle
         /// </summary>
         private Vector3 ResolveSlotPosition(int slotIndex, LoadingDockCargoKind kind)
         {
-            var cargoOffset = environment != null ? environment.GetCargoOffset(kind) : Vector3.zero;
-            if (environment.cargoSlotAnchors != null &&
-                slotIndex >= 0 &&
-                slotIndex < environment.cargoSlotAnchors.Length &&
-                environment.cargoSlotAnchors[slotIndex] != null)
-            {
-                return environment.cargoSlotAnchors[slotIndex].position + cargoOffset;
-            }
-
-            if (environment.cargoBayRoot == null)
-            {
-                return transform.position + cargoOffset;
-            }
-
-            var row = slotIndex / 3;
-            var column = slotIndex % 3;
-            var xOffset = (column - 1) * fallbackSlotSpacing;
-            var zOffset = row * fallbackSlotSpacing;
-            return environment.cargoBayRoot.position + new Vector3(xOffset, 1.1f, zOffset) + cargoOffset;
+            // 상하차 슬롯은 strict contract로 관리하므로, 여기서는 직렬화된 슬롯 앵커만 신뢰합니다.
+            var slotAnchor = environment.cargoSlotAnchors[slotIndex];
+            return slotAnchor.position + environment.GetCargoOffset(kind);
         }
 
         private void ClearCargoViews()

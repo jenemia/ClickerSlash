@@ -89,6 +89,31 @@ namespace ClikerSlash.Battle
     }
 
     /// <summary>
+    /// 같은 물류 타입 안에서 어떤 프리팹 variant를 사용할지 저장합니다.
+    /// </summary>
+    public struct CargoPrefabVariant : IComponentData
+    {
+        public int Value;
+    }
+
+    /// <summary>
+    /// 세션 스폰 플랜상의 순서를 저장해 팔레트 스택과 1:1 매핑합니다.
+    /// </summary>
+    public struct CargoSpawnSequenceId : IComponentData
+    {
+        public int Value;
+    }
+
+    /// <summary>
+    /// 팔레트에서 레일로 옮기는 연출이 끝날 때까지 실제 레인 표시를 지연합니다.
+    /// </summary>
+    public struct CargoRevealDelay : IComponentData
+    {
+        public float RemainingSeconds;
+        public float TotalSeconds;
+    }
+
+    /// <summary>
     /// 플레이어 또는 물류 엔티티의 현재 레인 인덱스를 저장합니다.
     /// </summary>
     public struct LaneIndex : IComponentData
