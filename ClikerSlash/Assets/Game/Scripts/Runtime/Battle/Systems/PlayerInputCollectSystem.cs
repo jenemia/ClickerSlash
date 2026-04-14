@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 키보드 입력을 프로토타입 플레이어의 레인 이동 큐 명령으로 변환합니다.
+    /// 키보드 입력을 현재 리듬 phase의 승인/레인선택 명령으로 변환합니다.
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     public partial struct PlayerInputCollectSystem : ISystem
@@ -23,8 +23,7 @@ namespace ClikerSlash.Battle
         /// </summary>
         public void OnUpdate(ref SystemState state)
         {
-            if (SystemAPI.GetSingleton<StageProgressState>().IsFinished != 0 ||
-                PrototypeSessionRuntime.IsLaneMovementLocked())
+            if (SystemAPI.GetSingleton<StageProgressState>().IsFinished != 0 || PrototypeSessionRuntime.IsPauseMenuOpen)
             {
                 return;
             }
@@ -35,26 +34,53 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            // 한 프레임에 한 방향만 큐에 넣어 반대 방향 동시 입력이 애매한 명령으로 남지 않게 합니다.
-            var direction = 0;
-            if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame)
+            var phase = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase;
+            if (phase == BattleMiniGamePhase.Approval)
             {
-                direction = -1;
-            }
-            else if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame)
-            {
-                direction = 1;
+                if (keyboard.zKey.wasPressedThisFrame)
+                {
+                    PrototypeSessionRuntime.QueueApprovalInput(ApprovalDecision.Reject);
+                }
+                else if (keyboard.xKey.wasPressedThisFrame)
+                {
+                    PrototypeSessionRuntime.QueueApprovalInput(ApprovalDecision.Approve);
+                }
+
+                return;
             }
 
-            if (direction == 0)
+            if (phase != BattleMiniGamePhase.RouteSelection)
             {
                 return;
             }
 
-            // 플레이어 큐는 버퍼로 유지되어 여러 번 누른 입력을 이후 이동 업데이트에서 순차 처리할 수 있습니다.
-            foreach (var moveBuffer in SystemAPI.Query<DynamicBuffer<LaneMoveCommandBufferElement>>().WithAll<PlayerTag>())
+            if (keyboard.digit1Key.wasPressedThisFrame)
             {
-                moveBuffer.Add(new LaneMoveCommandBufferElement { Direction = direction });
+                PrototypeSessionRuntime.QueueRouteInput(CargoRouteLane.Air);
+                return;
+            }
+
+            if (keyboard.digit2Key.wasPressedThisFrame)
+            {
+                PrototypeSessionRuntime.QueueRouteInput(CargoRouteLane.Sea);
+                return;
+            }
+
+            if (keyboard.digit3Key.wasPressedThisFrame)
+            {
+                PrototypeSessionRuntime.QueueRouteInput(CargoRouteLane.Rail);
+                return;
+            }
+
+            if (keyboard.digit4Key.wasPressedThisFrame)
+            {
+                PrototypeSessionRuntime.QueueRouteInput(CargoRouteLane.Truck);
+                return;
+            }
+
+            if (keyboard.digit5Key.wasPressedThisFrame)
+            {
+                PrototypeSessionRuntime.QueueRouteInput(CargoRouteLane.Return);
             }
         }
     }

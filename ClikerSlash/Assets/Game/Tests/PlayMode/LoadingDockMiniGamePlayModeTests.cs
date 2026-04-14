@@ -36,35 +36,35 @@ namespace ClikerSlash.Tests.PlayMode
         {
             var root = new GameObject("CargoViewPoolRoot").transform;
             var prefabSet = CargoVisualPrefabSet.Create(
-                CreateCargoPrefab("StandardCargoPrefab", Color.yellow, new Vector3(0.9f, 0.9f, 0.9f)),
+                CreateCargoPrefab("GeneralCargoPrefab", Color.yellow, new Vector3(0.9f, 0.9f, 0.9f)),
                 CreateCargoPrefab("FragileCargoPrefab", Color.cyan, new Vector3(0.82f, 0.82f, 0.82f)),
-                CreateCargoPrefab("HeavyCargoPrefab", Color.gray, new Vector3(1.08f, 1.08f, 1.08f)));
+                CreateCargoPrefab("FrozenCargoPrefab", Color.gray, new Vector3(1.08f, 1.08f, 1.08f)));
             var pool = new LoadingDockCargoViewPool(prefabSet);
 
-            var firstStandard = pool.Acquire(1, LoadingDockCargoKind.Standard, root, Vector3.zero);
+            var firstGeneral = pool.Acquire(1, LoadingDockCargoKind.General, root, Vector3.zero);
             var firstFragile = pool.Acquire(2, LoadingDockCargoKind.Fragile, root, Vector3.one);
 
-            pool.Release(firstStandard);
+            pool.Release(firstGeneral);
             pool.Release(firstFragile);
 
-            var reusedStandard = pool.Acquire(3, LoadingDockCargoKind.Standard, root, Vector3.right);
+            var reusedGeneral = pool.Acquire(3, LoadingDockCargoKind.General, root, Vector3.right);
             var reusedFragile = pool.Acquire(4, LoadingDockCargoKind.Fragile, root, Vector3.left);
 
-            Assert.That(reusedStandard.gameObject, Is.SameAs(firstStandard.gameObject));
+            Assert.That(reusedGeneral.gameObject, Is.SameAs(firstGeneral.gameObject));
             Assert.That(reusedFragile.gameObject, Is.SameAs(firstFragile.gameObject));
-            Assert.That(reusedStandard.EntryId, Is.EqualTo(3));
+            Assert.That(reusedGeneral.EntryId, Is.EqualTo(3));
             Assert.That(reusedFragile.EntryId, Is.EqualTo(4));
-            Assert.That(reusedStandard.Kind, Is.EqualTo(LoadingDockCargoKind.Standard));
+            Assert.That(reusedGeneral.Kind, Is.EqualTo(LoadingDockCargoKind.General));
             Assert.That(reusedFragile.Kind, Is.EqualTo(LoadingDockCargoKind.Fragile));
-            Assert.That(reusedStandard.gameObject.activeSelf, Is.True);
+            Assert.That(reusedGeneral.gameObject.activeSelf, Is.True);
             Assert.That(reusedFragile.gameObject.activeSelf, Is.True);
-            Assert.That(reusedStandard.GetComponent<Collider>(), Is.Not.Null);
+            Assert.That(reusedGeneral.GetComponent<Collider>(), Is.Not.Null);
             Assert.That(reusedFragile.GetComponent<Collider>(), Is.Not.Null);
 
             Object.Destroy(root.gameObject);
-            Object.Destroy(prefabSet.StandardPrefab);
+            Object.Destroy(prefabSet.GeneralPrefab);
             Object.Destroy(prefabSet.FragilePrefab);
-            Object.Destroy(prefabSet.HeavyPrefab);
+            Object.Destroy(prefabSet.FrozenPrefab);
             yield return null;
         }
 

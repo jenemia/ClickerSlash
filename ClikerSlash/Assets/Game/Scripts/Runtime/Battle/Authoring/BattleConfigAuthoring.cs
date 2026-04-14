@@ -18,11 +18,14 @@ namespace ClikerSlash.Battle
         [Min(0.05f)] public float SpawnInterval = 0.9f;
         [FormerlySerializedAs("EnemySpawnZ")]
         public float CargoSpawnZ = 8.5f;
+        public float ApprovalLaneX = 18f;
+        public float RouteLaneX = 0f;
         [Min(0.05f)] public float HandleWindowHalfDepth = 0.45f;
         public float JudgmentLineZ = -2.8f;
         [FormerlySerializedAs("DefenseLineZ")]
         public float FailLineZ = -3.8f;
         [Min(1)] public int StartingMaxHandleWeight = 10;
+        [Min(1)] public int DeliveryLaneMaxWeight = PrototypeSessionRuntime.DefaultDeliveryLaneMaxWeight;
     }
 
     /// <summary>
@@ -44,10 +47,13 @@ namespace ClikerSlash.Battle
                 HandleDurationSeconds = authoring.HandleDurationSeconds,
                 SpawnInterval = authoring.SpawnInterval,
                 CargoSpawnZ = authoring.CargoSpawnZ,
+                ApprovalLaneX = authoring.ApprovalLaneX,
+                RouteLaneX = authoring.RouteLaneX,
                 JudgmentLineZ = authoring.JudgmentLineZ,
                 FailLineZ = authoring.FailLineZ,
                 HandleWindowHalfDepth = authoring.HandleWindowHalfDepth,
-                StartingMaxHandleWeight = authoring.StartingMaxHandleWeight
+                StartingMaxHandleWeight = authoring.StartingMaxHandleWeight,
+                DeliveryLaneMaxWeight = authoring.DeliveryLaneMaxWeight
             });
         }
     }

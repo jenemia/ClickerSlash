@@ -76,10 +76,13 @@ namespace ClikerSlash.Battle
                     HandleDurationSeconds = battleConfigAuthoring.HandleDurationSeconds,
                     SpawnInterval = battleConfigAuthoring.SpawnInterval,
                     CargoSpawnZ = battleConfigAuthoring.CargoSpawnZ,
+                    ApprovalLaneX = battleConfigAuthoring.ApprovalLaneX,
+                    RouteLaneX = battleConfigAuthoring.RouteLaneX,
                     JudgmentLineZ = battleConfigAuthoring.JudgmentLineZ,
                     FailLineZ = battleConfigAuthoring.FailLineZ,
                     HandleWindowHalfDepth = battleConfigAuthoring.HandleWindowHalfDepth,
-                    StartingMaxHandleWeight = battleConfigAuthoring.StartingMaxHandleWeight
+                    StartingMaxHandleWeight = battleConfigAuthoring.StartingMaxHandleWeight,
+                    DeliveryLaneMaxWeight = battleConfigAuthoring.DeliveryLaneMaxWeight
                 },
                 runtimeState.resolvedProgression);
             entityManager.SetComponentData(battleEntity, battleConfig);

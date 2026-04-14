@@ -13,10 +13,13 @@ namespace ClikerSlash.Battle
         public float HandleDurationSeconds;
         public float SpawnInterval;
         public float CargoSpawnZ;
+        public float ApprovalLaneX;
+        public float RouteLaneX;
         public float JudgmentLineZ;
         public float FailLineZ;
         public float HandleWindowHalfDepth;
         public int StartingMaxHandleWeight;
+        public int DeliveryLaneMaxWeight;
     }
 
     /// <summary>
@@ -86,6 +89,30 @@ namespace ClikerSlash.Battle
     public struct CargoKind : IComponentData
     {
         public LoadingDockCargoKind Value;
+    }
+
+    /// <summary>
+    /// 승인 단계부터 최종 라우팅까지 동일 박스를 추적하기 위한 런타임 식별자입니다.
+    /// </summary>
+    public struct CargoEntryId : IComponentData
+    {
+        public int Value;
+    }
+
+    /// <summary>
+    /// 현재 물류가 어느 미니게임 phase에 속하는지 저장합니다.
+    /// </summary>
+    public struct CargoMiniGamePhase : IComponentData
+    {
+        public BattleMiniGamePhase Value;
+    }
+
+    /// <summary>
+    /// 승인 phase를 통과하며 내려진 불/가 결과를 저장합니다.
+    /// </summary>
+    public struct CargoApprovalDecision : IComponentData
+    {
+        public ApprovalDecision Value;
     }
 
     /// <summary>
@@ -222,6 +249,11 @@ namespace ClikerSlash.Battle
         public int MaxCombo;
         public float WorkedTimeSeconds;
         public float ResolvedWorkDurationSeconds;
+        public int ApprovedCargoCount;
+        public int RejectedCargoCount;
+        public int CorrectRouteCount;
+        public int MisrouteCount;
+        public int ReturnCount;
         // 0은 결과가 아직 핸드오프 스냅샷으로 복사되지 않은 상태, 1은 이미 복사된 상태를 뜻합니다.
         public byte HasSnapshot;
     }
@@ -242,6 +274,17 @@ namespace ClikerSlash.Battle
     public struct CargoMissedEvent : IComponentData
     {
         public int Penalty;
+    }
+
+    /// <summary>
+    /// 리듬 phase가 어느 지점에 있는지 ECS와 HUD가 함께 읽기 위한 싱글턴입니다.
+    /// </summary>
+    public struct RhythmPhaseState : IComponentData
+    {
+        public BattleMiniGamePhase CurrentPhase;
+        public int PendingApprovalCount;
+        public int PendingRouteCount;
+        public byte HasActiveCargo;
     }
 
     /// <summary>

@@ -88,11 +88,11 @@ namespace ClikerSlash.Editor
             battleView.CameraPosition = new Vector3(0f, 10.6f, -16.8f);
             battleView.CameraRotation = new Vector3(31f, 0f, 0f);
             battleView.CameraFieldOfView = 34f;
-            battleView.LaneWorldXs = new List<float> { -6f, -2f, 2f, 6f };
-            battleView.LaneWidth = 3f;
+            battleView.LaneWorldXs = new List<float> { -8f, -4f, 0f, 4f, 8f };
+            battleView.LaneWidth = 2.4f;
             battleView.LaneLength = 15f;
             battleView.LaneCenterZ = 3f;
-            battleView.LineVisualWidth = 16f;
+            battleView.LineVisualWidth = 22f;
             battleView.CargoSpawnZ = 10.5f;
             battleView.JudgmentLineZ = -2.8f;
             battleView.FailLineZ = -3.8f;
@@ -191,6 +191,7 @@ namespace ClikerSlash.Editor
             var root = new GameObject("LoadingDockEnvironmentRoot");
             root.transform.position = new Vector3(18f, 0f, battleView.LaneCenterZ + 1.5f);
             var authoring = root.AddComponent<LoadingDockEnvironmentAuthoring>();
+            var approvalAuthoring = root.AddComponent<ApprovalEnvironmentAuthoring>();
 
             var dockFloor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             dockFloor.name = "DockFloor";
@@ -236,6 +237,7 @@ namespace ClikerSlash.Editor
             cargoThrowOrigin.transform.SetParent(cargoBayRoot.transform, false);
             cargoThrowOrigin.transform.localPosition = new Vector3(2.4f, 1f, 2.2f);
             authoring.cargoThrowOrigin = cargoThrowOrigin.transform;
+            approvalAuthoring.cargoSpawnAnchor = cargoThrowOrigin.transform;
 
             authoring.cargoSlotAnchors = new Transform[PrototypeSessionRuntime.MaxLoadingDockActiveSlotCount];
             var slotOffsets = new[]
@@ -253,6 +255,26 @@ namespace ClikerSlash.Editor
                 slotAnchor.transform.localPosition = slotOffsets[slotIndex];
                 authoring.cargoSlotAnchors[slotIndex] = slotAnchor.transform;
             }
+
+            var approvalJudgmentAnchor = new GameObject("ApprovalJudgmentAnchor");
+            approvalJudgmentAnchor.transform.SetParent(root.transform, false);
+            approvalJudgmentAnchor.transform.localPosition = new Vector3(0f, 0.1f, battleView.JudgmentLineZ);
+            approvalAuthoring.judgmentAnchor = approvalJudgmentAnchor.transform;
+
+            var approvalFailAnchor = new GameObject("ApprovalFailAnchor");
+            approvalFailAnchor.transform.SetParent(root.transform, false);
+            approvalFailAnchor.transform.localPosition = new Vector3(0f, 0.1f, battleView.FailLineZ);
+            approvalAuthoring.failAnchor = approvalFailAnchor.transform;
+
+            var scaleAnchor = new GameObject("ApprovalScaleAnchor");
+            scaleAnchor.transform.SetParent(cargoBayRoot.transform, false);
+            scaleAnchor.transform.localPosition = new Vector3(-2.6f, 1.15f, 2.35f);
+            approvalAuthoring.scaleAnchor = scaleAnchor.transform;
+
+            var stickerAnchor = new GameObject("ApprovalStickerAnchor");
+            stickerAnchor.transform.SetParent(cargoBayRoot.transform, false);
+            stickerAnchor.transform.localPosition = new Vector3(0f, 1.75f, 1.6f);
+            approvalAuthoring.stickerAnchor = stickerAnchor.transform;
 
             var truckBayRoot = new GameObject("TruckBayRoot");
             truckBayRoot.transform.SetParent(root.transform, false);
@@ -308,14 +330,17 @@ namespace ClikerSlash.Editor
             battleConfig.HandleDurationSeconds = 0.4f;
             battleConfig.SpawnInterval = 0.9f;
             battleConfig.CargoSpawnZ = battleView.CargoSpawnZ;
+            battleConfig.ApprovalLaneX = 18f;
+            battleConfig.RouteLaneX = 0f;
             battleConfig.JudgmentLineZ = battleView.JudgmentLineZ;
             battleConfig.FailLineZ = battleView.FailLineZ;
             battleConfig.HandleWindowHalfDepth = 0.45f;
             battleConfig.StartingMaxHandleWeight = 10;
+            battleConfig.DeliveryLaneMaxWeight = PrototypeSessionRuntime.DefaultDeliveryLaneMaxWeight;
 
             var playerRoot = new GameObject("WorkerSpawn");
             var playerAuthoring = playerRoot.AddComponent<PlayerAuthoring>();
-            playerAuthoring.InitialLane = 1;
+            playerAuthoring.InitialLane = 2;
             playerAuthoring.Y = 0.6f;
             playerAuthoring.Z = battleView.PlayerZ;
 
@@ -343,7 +368,8 @@ namespace ClikerSlash.Editor
         {
             var presentationRoot = new GameObject("BattlePresentationRoot");
             var bridge = presentationRoot.AddComponent<BattlePresentationBridge>();
-            var miniGamePresenter = presentationRoot.AddComponent<LoadingDockMiniGamePresenter>();
+            var approvalPresenter = presentationRoot.AddComponent<ApprovalMiniGamePresenter>();
+            var routePresenter = presentationRoot.AddComponent<RouteLaneSelectionPresenter>();
 
             laneVirtualCamera = CreateVirtualCamera(
                 "LaneVirtualCamera",
@@ -367,9 +393,9 @@ namespace ClikerSlash.Editor
                 laneVirtualCamera,
                 loadingDockVirtualCamera);
             bridge.BindVisualPrefabs(workerPrefab, cargoVisualPrefabs);
-            miniGamePresenter.BindSceneReferences(mainCamera, loadingDockEnvironment, cargoVisualPrefabs);
             EditorUtility.SetDirty(bridge);
-            EditorUtility.SetDirty(miniGamePresenter);
+            EditorUtility.SetDirty(approvalPresenter);
+            EditorUtility.SetDirty(routePresenter);
         }
 
         private static CinemachineCamera CreateVirtualCamera(

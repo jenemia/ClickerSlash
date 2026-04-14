@@ -7,10 +7,10 @@ using UnityEngine;
 
 namespace ClikerSlash.Battle
 {
-    /// <summary>
-    /// ECS의 플레이어와 물류 위치를 프로토타입 씬의 단순 게임 오브젝트 뷰에 반영합니다.
-    /// 상하차 진입 연출은 Cinemachine 가상 카메라 우선순위 전환으로 처리합니다.
-    /// </summary>
+        /// <summary>
+        /// ECS의 현재 활성 물류를 프로토타입 씬의 단순 게임 오브젝트 뷰에 반영합니다.
+        /// 승인 phase는 보조 카메라, 레인선택 phase는 메인 레인 카메라를 사용합니다.
+        /// </summary>
     public sealed class BattlePresentationBridge : MonoBehaviour
     {
         [SerializeField] private GameObject playerViewPrefab;
@@ -175,8 +175,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
-            var shouldUseDockCamera = ShouldUseLoadingDockCamera(dockState);
+            var shouldUseDockCamera = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase == BattleMiniGamePhase.Approval;
 
             if (_dockCameraIsLive == shouldUseDockCamera)
             {
@@ -226,8 +225,7 @@ namespace ClikerSlash.Battle
         /// </summary>
         internal static bool ShouldUseLoadingDockCamera(LoadingDockRuntimeState dockState)
         {
-            return dockState.TransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
-                   dockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+            return dockState.CurrentArea == WorkAreaType.LoadingDock;
         }
 
         /// <summary>
@@ -319,11 +317,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
-            var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
-            var shouldShow = resolvedProgression.HasDockRobotAccess &&
-                             loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
-                             loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+            var shouldShow = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase == BattleMiniGamePhase.Approval;
 
             if (_dockRobotInstance == null)
             {

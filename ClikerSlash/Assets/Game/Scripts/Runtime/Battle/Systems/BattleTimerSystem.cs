@@ -16,6 +16,7 @@ namespace ClikerSlash.Battle
         {
             state.RequireForUpdate<StageProgressState>();
             state.RequireForUpdate<BattleSessionStatsState>();
+            state.RequireForUpdate<RhythmPhaseState>();
         }
 
         /// <summary>
@@ -30,12 +31,18 @@ namespace ClikerSlash.Battle
             }
 
             var stats = SystemAPI.GetSingletonRW<BattleSessionStatsState>();
+            var phaseState = SystemAPI.GetSingletonRW<RhythmPhaseState>();
             var elapsedWorkTime = stageProgress.ValueRO.ElapsedWorkTime + SystemAPI.Time.DeltaTime;
             var remainingWorkTime = Unity.Mathematics.math.max(0f, stageProgress.ValueRO.RemainingWorkTime - SystemAPI.Time.DeltaTime);
 
             stageProgress.ValueRW.ElapsedWorkTime = elapsedWorkTime;
             stageProgress.ValueRW.RemainingWorkTime = remainingWorkTime;
             stats.ValueRW.WorkedTimeSeconds = elapsedWorkTime;
+            var runtimeSnapshot = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot();
+            phaseState.ValueRW.CurrentPhase = runtimeSnapshot.CurrentPhase;
+            phaseState.ValueRW.PendingApprovalCount = runtimeSnapshot.PendingApprovalCount;
+            phaseState.ValueRW.PendingRouteCount = runtimeSnapshot.PendingRouteCount;
+            phaseState.ValueRW.HasActiveCargo = runtimeSnapshot.HasActiveCargo ? (byte)1 : (byte)0;
         }
     }
 }

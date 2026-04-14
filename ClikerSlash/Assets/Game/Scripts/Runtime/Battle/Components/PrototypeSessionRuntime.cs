@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -14,6 +15,23 @@ namespace ClikerSlash.Battle
         public int CurrentCombo;
         public int MaxCombo;
         public float WorkedTimeSeconds;
+        public int ApprovedCargoCount;
+        public int RejectedCargoCount;
+        public int CorrectRouteCount;
+        public int MisrouteCount;
+        public int ReturnCount;
+    }
+
+    internal enum PendingPhaseInput
+    {
+        None = 0,
+        ApprovalReject = 1,
+        ApprovalApprove = 2,
+        RouteAir = 3,
+        RouteSea = 4,
+        RouteRail = 5,
+        RouteTruck = 6,
+        RouteReturn = 7
     }
 
     /// <summary>
@@ -28,28 +46,23 @@ namespace ClikerSlash.Battle
         public const float DefaultHealthDurationBonusSeconds = 10f;
         public const float DefaultLoadingDockTransitionDurationSeconds = 0.35f;
         public const int MaxLoadingDockActiveSlotCount = 5;
+        public const int FixedRouteLaneCount = 5;
+        public const int DefaultDeliveryLaneMaxWeight = 5;
 
-        // 참이면 허브가 이전 작업에서 캡처한 결과 스냅샷을 표시해야 합니다.
         public static bool HasLastBattleResult { get; private set; }
         public static BattleResultSnapshot LastBattleResult { get; private set; }
         public static float ResolvedWorkDurationSeconds { get; private set; }
         public static bool IsPauseMenuOpen { get; private set; }
-        // 참이면 허브에서 작업 현장으로 넘어가는 중이며, 전투 씬이 아직 요청을 소비하지 않은 상태입니다.
         public static bool HasPendingBattleEntryRequest { get; private set; }
-        private static WorkAreaType _currentWorkArea = WorkAreaType.Lane;
-        private static WorkAreaTransitionPhase _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
-        private static bool _hasPendingLoadingDockEntryRequest;
-        private static bool _hasPendingLoadingDockReturnRequest;
-        private static float _loadingDockTransitionElapsed;
-        private static readonly Queue<LoadingDockCargoQueueEntry> _loadingDockBacklogQueue = new();
-        private static readonly LoadingDockCargoQueueEntry?[] _loadingDockActiveSlots = new LoadingDockCargoQueueEntry?[MaxLoadingDockActiveSlotCount];
-        private static int _nextLoadingDockCargoEntryId = 1;
 
+        private static readonly Queue<ApprovalCargoSnapshot> _pendingApprovalQueue = new();
+        private static readonly Queue<RouteSelectionCargoSnapshot> _pendingRouteQueue = new();
+        private static int _nextCargoEntryId = 1;
+        private static BattleMiniGamePhase _currentMiniGamePhase = BattleMiniGamePhase.Approval;
+        private static bool _hasActiveCargo;
+        private static PendingPhaseInput _pendingPhaseInput;
         private static MetaProgressionRuntimeState _metaProgressionRuntimeState;
 
-        /// <summary>
-        /// 기존 허브 UI 호환을 위해 시작 체력 노드 레벨을 1부터 환산해 노출합니다.
-        /// </summary>
         public static int HealthLevel
         {
             get
@@ -61,25 +74,16 @@ namespace ClikerSlash.Battle
             }
         }
 
-        /// <summary>
-        /// 현재 메타 진행 런타임 상태를 외부 브리지와 테스트에서 읽을 수 있게 노출합니다.
-        /// </summary>
         public static MetaProgressionRuntimeState GetMetaProgressionRuntimeState()
         {
             return _metaProgressionRuntimeState;
         }
 
-        /// <summary>
-        /// 현재 해금 상태를 직렬화 계약 형태로 깊은 복제해 반환합니다.
-        /// </summary>
         public static PlayerMetaProgressionSnapshot GetMetaProgressionSnapshot()
         {
             return MetaProgressionProtoContractMapper.ToContract(_metaProgressionRuntimeState);
         }
 
-        /// <summary>
-        /// 현재 세션 플레이어 재화 상태를 읽기 전용 복사본으로 반환합니다.
-        /// </summary>
         public static PlayerCurrencySnapshot GetCurrencySnapshot()
         {
             EnsureMetaProgressionInitialized(MetaProgressionCatalogAsset.LoadDefaultCatalog());
@@ -94,9 +98,6 @@ namespace ClikerSlash.Battle
                 };
         }
 
-        /// <summary>
-        /// 현재 세션 시작에 쓰일 메타 집계 결과를 반환합니다.
-        /// </summary>
         public static ResolvedMetaProgression GetResolvedMetaProgression()
         {
             if (_metaProgressionRuntimeState == null)
@@ -107,179 +108,282 @@ namespace ClikerSlash.Battle
             return _metaProgressionRuntimeState.resolvedProgression;
         }
 
-        /// <summary>
-        /// 현재 상하차 진입/복귀 계약 상태를 읽기 전용 스냅샷으로 반환합니다.
-        /// </summary>
-        public static LoadingDockRuntimeState GetLoadingDockRuntimeState(
-            MetaProgressionCatalogAsset catalog = null,
-            int physicalLaneCount = int.MaxValue)
+        public static BattleMiniGamePhaseSnapshot GetBattleMiniGamePhaseSnapshot()
         {
-            EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
-            return new LoadingDockRuntimeState
+            return new BattleMiniGamePhaseSnapshot
             {
-                HasLoadingDockAccess = _metaProgressionRuntimeState.resolvedProgression.HasLoadingDockAccess,
-                CurrentArea = _currentWorkArea,
-                TransitionPhase = _workAreaTransitionPhase,
-                HasPendingEntryRequest = _hasPendingLoadingDockEntryRequest,
-                HasPendingReturnRequest = _hasPendingLoadingDockReturnRequest
+                CurrentPhase = _currentMiniGamePhase,
+                HasActiveCargo = _hasActiveCargo,
+                PendingApprovalCount = _pendingApprovalQueue.Count,
+                PendingRouteCount = _pendingRouteQueue.Count,
+                DeliveryLaneMaxWeight = DefaultDeliveryLaneMaxWeight
             };
         }
 
-        /// <summary>
-        /// 현재 상하차 큐의 backlog/활성 슬롯 요약을 반환합니다.
-        /// </summary>
-        public static LoadingDockQueueSnapshot GetLoadingDockQueueSnapshot()
+        public static ApprovalCargoSnapshot[] GetPendingApprovalCargoEntries()
         {
-            var activeSlotCount = 0;
-            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
-            {
-                if (_loadingDockActiveSlots[slotIndex].HasValue)
-                {
-                    activeSlotCount += 1;
-                }
-            }
-
-            return new LoadingDockQueueSnapshot
-            {
-                BacklogCount = _loadingDockBacklogQueue.Count,
-                ActiveSlotCount = activeSlotCount,
-                MaxActiveSlotCount = MaxLoadingDockActiveSlotCount,
-                TotalCount = activeSlotCount + _loadingDockBacklogQueue.Count
-            };
+            return _pendingApprovalQueue.ToArray();
         }
 
-        /// <summary>
-        /// 현재 활성 슬롯에 배치된 상하차 물류 엔트리 복사본을 반환합니다.
-        /// </summary>
-        public static LoadingDockActiveCargoSlotSnapshot[] GetLoadingDockActiveCargoEntries()
+        public static RouteSelectionCargoSnapshot[] GetPendingRouteCargoEntries()
         {
-            var activeEntries = new List<LoadingDockActiveCargoSlotSnapshot>(MaxLoadingDockActiveSlotCount);
-            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
-            {
-                if (!_loadingDockActiveSlots[slotIndex].HasValue)
-                {
-                    continue;
-                }
+            return _pendingRouteQueue.ToArray();
+        }
 
-                var entry = _loadingDockActiveSlots[slotIndex].Value;
-                activeEntries.Add(new LoadingDockActiveCargoSlotSnapshot
+        public static int GetDeliveryLaneMaxWeight(CargoRouteLane routeLane)
+        {
+            return routeLane == CargoRouteLane.Return ? int.MaxValue : DefaultDeliveryLaneMaxWeight;
+        }
+
+        public static bool IsCargoDeliverable(int weight)
+        {
+            return weight <= DefaultDeliveryLaneMaxWeight;
+        }
+
+        public static void InitializeRhythmCargoPlan(float resolvedWorkDurationSeconds, float spawnIntervalSeconds, CargoConfig cargoConfig, uint seed)
+        {
+            ClearRhythmQueues();
+            _currentMiniGamePhase = BattleMiniGamePhase.Approval;
+            _pendingPhaseInput = PendingPhaseInput.None;
+            _hasActiveCargo = false;
+
+            var safeInterval = Mathf.Max(0.25f, spawnIntervalSeconds * 2f);
+            var totalCargoCount = Mathf.Max(6, Mathf.CeilToInt(resolvedWorkDurationSeconds / safeInterval));
+            var randomSeed = seed == 0u ? 1u : seed;
+            var random = new System.Random(unchecked((int)randomSeed));
+
+            for (var index = 0; index < totalCargoCount; index += 1)
+            {
+                var kind = (LoadingDockCargoKind)random.Next(0, 3);
+                var weight = ResolvePlannedWeight(kind, cargoConfig, random);
+                var reward = cargoConfig.Reward + Mathf.Max(0, weight - 3) * 6;
+                var penalty = cargoConfig.Penalty + Mathf.Max(0, weight - DefaultDeliveryLaneMaxWeight) * 5;
+                _pendingApprovalQueue.Enqueue(new ApprovalCargoSnapshot
                 {
-                    SlotIndex = slotIndex,
-                    EntryId = entry.EntryId,
-                    Kind = entry.Kind,
-                    Weight = entry.Weight
+                    EntryId = _nextCargoEntryId,
+                    Kind = kind,
+                    Weight = weight,
+                    Reward = reward,
+                    Penalty = penalty
                 });
+                _nextCargoEntryId += 1;
             }
-
-            return activeEntries.ToArray();
         }
 
-        /// <summary>
-        /// 현재 backlog 대기열에 쌓인 상하차 물류 엔트리 복사본을 반환합니다.
-        /// </summary>
-        public static LoadingDockCargoQueueEntry[] GetLoadingDockBacklogCargoEntries()
+        public static void InitializeRhythmCargoPlan(IReadOnlyList<ApprovalCargoSnapshot> plannedCargoEntries)
         {
-            return _loadingDockBacklogQueue.ToArray();
-        }
+            ClearRhythmQueues();
+            _currentMiniGamePhase = BattleMiniGamePhase.Approval;
+            _pendingPhaseInput = PendingPhaseInput.None;
+            _hasActiveCargo = false;
 
-        /// <summary>
-        /// 레인에서 성공 처리된 물류를 상하차 세션 큐에 적재합니다.
-        /// </summary>
-        public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind)
-        {
-            var defaultWeight = kind switch
+            var nextEntryId = 1;
+            if (plannedCargoEntries == null)
             {
-                LoadingDockCargoKind.Heavy => 12,
-                _ => 6
-            };
-            EnqueueLoadingDockCargo(kind, defaultWeight);
-        }
-
-        /// <summary>
-        /// 레인에서 성공 처리된 물류를 무게 정보와 함께 상하차 세션 큐에 적재합니다.
-        /// </summary>
-        public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind, int weight)
-        {
-            var queueEntry = new LoadingDockCargoQueueEntry
-            {
-                EntryId = _nextLoadingDockCargoEntryId,
-                Kind = kind,
-                Weight = weight
-            };
-            _nextLoadingDockCargoEntryId += 1;
-
-            var emptySlotIndex = FindFirstEmptyLoadingDockSlotIndex();
-            if (emptySlotIndex >= 0)
-            {
-                _loadingDockActiveSlots[emptySlotIndex] = queueEntry;
+                _nextCargoEntryId = nextEntryId;
                 return;
             }
 
-            _loadingDockBacklogQueue.Enqueue(queueEntry);
+            for (var index = 0; index < plannedCargoEntries.Count; index += 1)
+            {
+                var cargo = plannedCargoEntries[index];
+                if (cargo.EntryId <= 0)
+                {
+                    cargo.EntryId = nextEntryId;
+                }
+
+                _pendingApprovalQueue.Enqueue(cargo);
+                nextEntryId = Mathf.Max(nextEntryId, cargo.EntryId + 1);
+            }
+
+            _nextCargoEntryId = nextEntryId;
         }
 
-        /// <summary>
-        /// 활성 슬롯에 표시된 상하차 물류를 delivered 처리하고 backlog를 즉시 보충합니다.
-        /// </summary>
-        public static bool TryDeliverLoadingDockCargo(int entryId, out LoadingDockCargoQueueEntry deliveredEntry)
+        public static bool TryDequeueNextPhaseCargo(
+            out BattleMiniGamePhase phase,
+            out ApprovalCargoSnapshot approvalCargo,
+            out RouteSelectionCargoSnapshot routeCargo)
         {
-            deliveredEntry = default;
-            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
+            phase = _currentMiniGamePhase;
+            approvalCargo = default;
+            routeCargo = default;
+
+            if (_hasActiveCargo)
             {
-                if (!_loadingDockActiveSlots[slotIndex].HasValue)
+                return false;
+            }
+
+            if (_currentMiniGamePhase == BattleMiniGamePhase.Approval)
+            {
+                if (_pendingApprovalQueue.Count > 0)
                 {
-                    continue;
+                    approvalCargo = _pendingApprovalQueue.Dequeue();
+                    _hasActiveCargo = true;
+                    return true;
                 }
 
-                var activeEntry = _loadingDockActiveSlots[slotIndex].Value;
-                if (activeEntry.EntryId != entryId)
+                _currentMiniGamePhase = _pendingRouteQueue.Count > 0
+                    ? BattleMiniGamePhase.RouteSelection
+                    : BattleMiniGamePhase.Completed;
+                phase = _currentMiniGamePhase;
+            }
+
+            if (_currentMiniGamePhase == BattleMiniGamePhase.RouteSelection)
+            {
+                if (_pendingRouteQueue.Count > 0)
                 {
-                    continue;
+                    routeCargo = _pendingRouteQueue.Dequeue();
+                    _hasActiveCargo = true;
+                    return true;
                 }
 
-                deliveredEntry = activeEntry;
-                _loadingDockActiveSlots[slotIndex] = null;
-                if (_loadingDockBacklogQueue.Count > 0)
-                {
-                    _loadingDockActiveSlots[slotIndex] = _loadingDockBacklogQueue.Dequeue();
-                }
-
-                return true;
+                _currentMiniGamePhase = BattleMiniGamePhase.Completed;
+                phase = _currentMiniGamePhase;
             }
 
             return false;
         }
 
-        /// <summary>
-        /// 상하차 세션 큐와 슬롯 상태를 모두 비웁니다.
-        /// </summary>
-        public static void ClearLoadingDockQueue()
+        public static void NotifyActiveCargoResolved()
         {
-            _loadingDockBacklogQueue.Clear();
-            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
+            _hasActiveCargo = false;
+            if (_currentMiniGamePhase == BattleMiniGamePhase.Approval && _pendingApprovalQueue.Count == 0)
             {
-                _loadingDockActiveSlots[slotIndex] = null;
+                _currentMiniGamePhase = _pendingRouteQueue.Count > 0
+                    ? BattleMiniGamePhase.RouteSelection
+                    : BattleMiniGamePhase.Completed;
+                return;
             }
 
-            _nextLoadingDockCargoEntryId = 1;
+            if (_currentMiniGamePhase == BattleMiniGamePhase.RouteSelection && _pendingRouteQueue.Count == 0)
+            {
+                _currentMiniGamePhase = BattleMiniGamePhase.Completed;
+            }
         }
 
-        private static int FindFirstEmptyLoadingDockSlotIndex()
+        public static bool IsMiniGameLoopFinished()
         {
-            for (var slotIndex = 0; slotIndex < _loadingDockActiveSlots.Length; slotIndex += 1)
+            return _currentMiniGamePhase == BattleMiniGamePhase.Completed && !_hasActiveCargo;
+        }
+
+        public static void QueueApprovalInput(ApprovalDecision decision)
+        {
+            _pendingPhaseInput = decision switch
             {
-                if (!_loadingDockActiveSlots[slotIndex].HasValue)
+                ApprovalDecision.Approve => PendingPhaseInput.ApprovalApprove,
+                ApprovalDecision.Reject => PendingPhaseInput.ApprovalReject,
+                _ => PendingPhaseInput.None
+            };
+        }
+
+        public static void QueueRouteInput(CargoRouteLane routeLane)
+        {
+            _pendingPhaseInput = routeLane switch
+            {
+                CargoRouteLane.Air => PendingPhaseInput.RouteAir,
+                CargoRouteLane.Sea => PendingPhaseInput.RouteSea,
+                CargoRouteLane.Rail => PendingPhaseInput.RouteRail,
+                CargoRouteLane.Truck => PendingPhaseInput.RouteTruck,
+                CargoRouteLane.Return => PendingPhaseInput.RouteReturn,
+                _ => PendingPhaseInput.None
+            };
+        }
+
+        public static bool TryConsumeApprovalInput(out ApprovalDecision decision)
+        {
+            decision = _pendingPhaseInput switch
+            {
+                PendingPhaseInput.ApprovalApprove => ApprovalDecision.Approve,
+                PendingPhaseInput.ApprovalReject => ApprovalDecision.Reject,
+                _ => ApprovalDecision.None
+            };
+
+            if (decision == ApprovalDecision.None)
+            {
+                return false;
+            }
+
+            _pendingPhaseInput = PendingPhaseInput.None;
+            return true;
+        }
+
+        public static bool TryConsumeRouteInput(out CargoRouteLane routeLane)
+        {
+            routeLane = _pendingPhaseInput switch
+            {
+                PendingPhaseInput.RouteAir => CargoRouteLane.Air,
+                PendingPhaseInput.RouteSea => CargoRouteLane.Sea,
+                PendingPhaseInput.RouteRail => CargoRouteLane.Rail,
+                PendingPhaseInput.RouteTruck => CargoRouteLane.Truck,
+                PendingPhaseInput.RouteReturn => CargoRouteLane.Return,
+                _ => CargoRouteLane.Air
+            };
+
+            if (_pendingPhaseInput is < PendingPhaseInput.RouteAir or > PendingPhaseInput.RouteReturn)
+            {
+                return false;
+            }
+
+            _pendingPhaseInput = PendingPhaseInput.None;
+            return true;
+        }
+
+        public static void EnqueueRouteSelectionCargo(ApprovalCargoSnapshot cargo, ApprovalDecision decision)
+        {
+            if (decision == ApprovalDecision.None)
+            {
+                return;
+            }
+
+            _pendingRouteQueue.Enqueue(new RouteSelectionCargoSnapshot
+            {
+                EntryId = cargo.EntryId,
+                Kind = cargo.Kind,
+                Weight = cargo.Weight,
+                Reward = cargo.Reward,
+                Penalty = cargo.Penalty,
+                ApprovalDecision = decision,
+                IsDeliverable = IsCargoDeliverable(cargo.Weight)
+            });
+        }
+
+        public static void ResolveRouteOutcome(
+            RouteSelectionCargoSnapshot cargo,
+            CargoRouteLane selectedRoute,
+            out int incomeDelta,
+            out bool countsAsCorrectRoute,
+            out bool countsAsReturn,
+            out bool countsAsMisroute)
+        {
+            incomeDelta = 0;
+            countsAsCorrectRoute = false;
+            countsAsReturn = false;
+            countsAsMisroute = false;
+
+            if (selectedRoute == CargoRouteLane.Return)
+            {
+                countsAsReturn = true;
+                if (cargo.ApprovalDecision == ApprovalDecision.Reject)
                 {
-                    return slotIndex;
+                    return;
                 }
+
+                countsAsMisroute = true;
+                incomeDelta = -cargo.Penalty;
+                return;
             }
 
-            return -1;
+            if (cargo.ApprovalDecision == ApprovalDecision.Approve && cargo.Weight <= GetDeliveryLaneMaxWeight(selectedRoute))
+            {
+                countsAsCorrectRoute = true;
+                incomeDelta = cargo.Reward;
+                return;
+            }
+
+            countsAsMisroute = true;
+            incomeDelta = -cargo.Penalty;
         }
 
-        /// <summary>
-        /// 다음 씬이 저장 데이터 없이도 읽을 수 있도록 마지막 작업 결과를 저장합니다.
-        /// </summary>
         public static void StoreBattleResult(BattleResultSnapshot snapshot)
         {
             EnsureMetaProgressionInitialized(MetaProgressionCatalogAsset.LoadDefaultCatalog());
@@ -296,37 +400,26 @@ namespace ClikerSlash.Battle
             _metaProgressionRuntimeState.snapshot.currency.totalBattleEarned += snapshot.TotalMoney;
         }
 
-        /// <summary>
-        /// 이전에 저장된 결과 스냅샷을 비웁니다.
-        /// </summary>
         public static void ClearLastBattleResult()
         {
             HasLastBattleResult = false;
             LastBattleResult = default;
         }
 
-        /// <summary>
-        /// 허브 메타와 마지막 결과를 포함한 프로토타입 런타임 상태를 초기값으로 되돌립니다.
-        /// </summary>
         public static void ResetPrototypeState()
         {
             ClosePauseMenu();
             HasLastBattleResult = false;
             LastBattleResult = default;
-            ClearLoadingDockQueue();
+            ClearRhythmQueues();
             ResolvedWorkDurationSeconds = 0f;
             HasPendingBattleEntryRequest = false;
-            _currentWorkArea = WorkAreaType.Lane;
-            _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
-            _hasPendingLoadingDockEntryRequest = false;
-            _hasPendingLoadingDockReturnRequest = false;
-            _loadingDockTransitionElapsed = 0f;
+            _currentMiniGamePhase = BattleMiniGamePhase.Approval;
+            _pendingPhaseInput = PendingPhaseInput.None;
+            _hasActiveCargo = false;
             _metaProgressionRuntimeState = null;
         }
 
-        /// <summary>
-        /// 카탈로그 기본값을 기반으로 메타 진행 상태가 최소 1회 초기화되도록 합니다.
-        /// </summary>
         public static void EnsureMetaProgressionInitialized(
             MetaProgressionCatalogAsset catalog,
             int physicalLaneCount = int.MaxValue)
@@ -339,9 +432,6 @@ namespace ClikerSlash.Battle
             RebuildResolvedMetaProgression(catalog, physicalLaneCount);
         }
 
-        /// <summary>
-        /// 외부에서 구성한 메타 진행 스냅샷으로 현재 런타임 상태를 교체합니다.
-        /// </summary>
         public static void SetMetaProgressionSnapshot(
             PlayerMetaProgressionSnapshot snapshot,
             MetaProgressionCatalogAsset catalog,
@@ -354,17 +444,11 @@ namespace ClikerSlash.Battle
                 physicalLaneCount);
         }
 
-        /// <summary>
-        /// 허브 임시 메타 상태에서 시작 체력 노드를 한 단계 올립니다.
-        /// </summary>
         public static bool IncreaseHealthLevel()
         {
             return TryUpgradeNode(MetaProgressionCatalogAsset.StarterVitalityNodeId, MetaProgressionCatalogAsset.LoadDefaultCatalog());
         }
 
-        /// <summary>
-        /// 특정 메타 노드를 한 단계 올리고 집계 결과를 다시 계산합니다.
-        /// </summary>
         public static bool TryUpgradeNode(
             string nodeId,
             MetaProgressionCatalogAsset catalog,
@@ -398,18 +482,12 @@ namespace ClikerSlash.Battle
             return true;
         }
 
-        /// <summary>
-        /// 현재 메타 집계 기준으로 다음 세션 예상 작업시간을 계산합니다.
-        /// </summary>
         public static float PreviewResolvedWorkDuration()
         {
             EnsureMetaProgressionInitialized(MetaProgressionCatalogAsset.LoadDefaultCatalog());
             return _metaProgressionRuntimeState.resolvedProgression.SessionDurationSeconds;
         }
 
-        /// <summary>
-        /// 실제 세션 설정값 또는 메타 집계를 기준으로 이번 진입의 작업시간을 계산하고 캐시합니다.
-        /// </summary>
         public static float ResolveWorkDuration(float baseWorkDurationSeconds, float healthDurationBonusSeconds)
         {
             if (_metaProgressionRuntimeState != null)
@@ -422,183 +500,176 @@ namespace ClikerSlash.Battle
             return ResolvedWorkDurationSeconds;
         }
 
-        /// <summary>
-        /// 사용자가 작업 씬 밖에서 새 작업 진입을 요청했음을 표시합니다.
-        /// </summary>
         public static void RequestBattleEntry()
         {
             ClosePauseMenu();
-            ClearLoadingDockQueue();
+            ClearRhythmQueues();
             HasPendingBattleEntryRequest = true;
         }
 
-        /// <summary>
-        /// 작업 씬이 진입 요청을 인지한 뒤 대기 중인 진입 플래그를 지웁니다.
-        /// </summary>
         public static void ConsumeBattleEntryRequest()
         {
             HasPendingBattleEntryRequest = false;
         }
 
-        /// <summary>
-        /// 상하차 오픈이 해금된 상태에서만 상하차 구역 진입 연출을 요청합니다.
-        /// </summary>
-        public static bool TryRequestLoadingDockEntry(
-            MetaProgressionCatalogAsset catalog,
+        public static LoadingDockRuntimeState GetLoadingDockRuntimeState(
+            MetaProgressionCatalogAsset catalog = null,
             int physicalLaneCount = int.MaxValue)
         {
             EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
-            if (IsPauseMenuOpen ||
-                !_metaProgressionRuntimeState.resolvedProgression.HasLoadingDockAccess ||
-                _currentWorkArea != WorkAreaType.Lane ||
-                _workAreaTransitionPhase != WorkAreaTransitionPhase.None)
+            var approvalActive = _currentMiniGamePhase == BattleMiniGamePhase.Approval;
+            return new LoadingDockRuntimeState
             {
-                return false;
-            }
-
-            _hasPendingLoadingDockEntryRequest = true;
-            _hasPendingLoadingDockReturnRequest = false;
-            _workAreaTransitionPhase = WorkAreaTransitionPhase.EnteringLoadingDock;
-            _loadingDockTransitionElapsed = 0f;
-            return true;
+                HasLoadingDockAccess = approvalActive,
+                CurrentArea = approvalActive ? WorkAreaType.LoadingDock : WorkAreaType.Lane,
+                TransitionPhase = approvalActive ? WorkAreaTransitionPhase.ActiveInLoadingDock : WorkAreaTransitionPhase.None,
+                HasPendingEntryRequest = false,
+                HasPendingReturnRequest = false
+            };
         }
 
-        /// <summary>
-        /// 상하차 진입 연출이 끝났을 때 호출해 현재 작업 구역을 상하차로 확정합니다.
-        /// </summary>
+        public static LoadingDockQueueSnapshot GetLoadingDockQueueSnapshot()
+        {
+            return new LoadingDockQueueSnapshot
+            {
+                BacklogCount = _pendingRouteQueue.Count,
+                ActiveSlotCount = _pendingApprovalQueue.Count,
+                MaxActiveSlotCount = MaxLoadingDockActiveSlotCount,
+                TotalCount = _pendingApprovalQueue.Count + _pendingRouteQueue.Count
+            };
+        }
+
+        public static LoadingDockActiveCargoSlotSnapshot[] GetLoadingDockActiveCargoEntries()
+        {
+            var snapshots = new List<LoadingDockActiveCargoSlotSnapshot>();
+            var slotIndex = 0;
+            foreach (var approvalCargo in _pendingApprovalQueue)
+            {
+                snapshots.Add(new LoadingDockActiveCargoSlotSnapshot
+                {
+                    SlotIndex = slotIndex,
+                    EntryId = approvalCargo.EntryId,
+                    Kind = approvalCargo.Kind,
+                    Weight = approvalCargo.Weight
+                });
+                slotIndex += 1;
+                if (slotIndex >= MaxLoadingDockActiveSlotCount)
+                {
+                    break;
+                }
+            }
+
+            return snapshots.ToArray();
+        }
+
+        public static LoadingDockCargoQueueEntry[] GetLoadingDockBacklogCargoEntries()
+        {
+            var entries = new List<LoadingDockCargoQueueEntry>();
+            foreach (var routeCargo in _pendingRouteQueue)
+            {
+                entries.Add(new LoadingDockCargoQueueEntry
+                {
+                    EntryId = routeCargo.EntryId,
+                    Kind = routeCargo.Kind,
+                    Weight = routeCargo.Weight
+                });
+            }
+
+            return entries.ToArray();
+        }
+
+        public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind)
+        {
+            EnqueueLoadingDockCargo(kind, DefaultDeliveryLaneMaxWeight);
+        }
+
+        public static void EnqueueLoadingDockCargo(LoadingDockCargoKind kind, int weight)
+        {
+            _pendingRouteQueue.Enqueue(new RouteSelectionCargoSnapshot
+            {
+                EntryId = _nextCargoEntryId++,
+                Kind = kind,
+                Weight = weight,
+                Reward = 60,
+                Penalty = 35,
+                ApprovalDecision = ApprovalDecision.Approve,
+                IsDeliverable = IsCargoDeliverable(weight)
+            });
+        }
+
+        public static bool TryDeliverLoadingDockCargo(int entryId, out LoadingDockCargoQueueEntry deliveredEntry)
+        {
+            deliveredEntry = default;
+            return false;
+        }
+
+        public static void ClearLoadingDockQueue()
+        {
+            ClearRhythmQueues();
+        }
+
+        public static bool TryRequestLoadingDockEntry(MetaProgressionCatalogAsset catalog, int physicalLaneCount = int.MaxValue)
+        {
+            return false;
+        }
+
         public static void ConsumeLoadingDockEntryRequest()
         {
-            if (!_hasPendingLoadingDockEntryRequest)
-            {
-                return;
-            }
-
-            _hasPendingLoadingDockEntryRequest = false;
-            _currentWorkArea = WorkAreaType.LoadingDock;
-            _workAreaTransitionPhase = WorkAreaTransitionPhase.ActiveInLoadingDock;
-            _loadingDockTransitionElapsed = 0f;
         }
 
-        /// <summary>
-        /// 상하차 작업이 끝나면 레인으로 복귀하는 전환을 요청합니다.
-        /// </summary>
         public static bool TryRequestLoadingDockReturn()
         {
-            if (IsPauseMenuOpen ||
-                _currentWorkArea != WorkAreaType.LoadingDock ||
-                _workAreaTransitionPhase != WorkAreaTransitionPhase.ActiveInLoadingDock)
-            {
-                return false;
-            }
-
-            _hasPendingLoadingDockReturnRequest = true;
-            _workAreaTransitionPhase = WorkAreaTransitionPhase.ReturningToLane;
-            _loadingDockTransitionElapsed = 0f;
-            return true;
+            return false;
         }
 
-        /// <summary>
-        /// 레인 복귀 연출이 끝났을 때 호출해 기본 작업 구역으로 상태를 정리합니다.
-        /// </summary>
         public static void ConsumeLoadingDockReturnRequest()
         {
-            if (!_hasPendingLoadingDockReturnRequest)
-            {
-                return;
-            }
-
-            _hasPendingLoadingDockReturnRequest = false;
-            _currentWorkArea = WorkAreaType.Lane;
-            _workAreaTransitionPhase = WorkAreaTransitionPhase.None;
-            _loadingDockTransitionElapsed = 0f;
         }
 
-        /// <summary>
-        /// 프레젠테이션 브리지 호출이 빠져도 상하차 전환 상태가 영구 대기하지 않도록 시간을 기준으로 확정합니다.
-        /// </summary>
         public static void AdvanceLoadingDockTransition(float deltaTime, float transitionDuration = DefaultLoadingDockTransitionDurationSeconds)
         {
-            if (IsPauseMenuOpen)
-            {
-                return;
-            }
-
-            if (_workAreaTransitionPhase != WorkAreaTransitionPhase.EnteringLoadingDock &&
-                _workAreaTransitionPhase != WorkAreaTransitionPhase.ReturningToLane)
-            {
-                return;
-            }
-
-            _loadingDockTransitionElapsed += Mathf.Max(0f, deltaTime);
-            if (_loadingDockTransitionElapsed < Mathf.Max(0.01f, transitionDuration))
-            {
-                return;
-            }
-
-            if (_workAreaTransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock)
-            {
-                ConsumeLoadingDockEntryRequest();
-                return;
-            }
-
-            ConsumeLoadingDockReturnRequest();
         }
 
-        /// <summary>
-        /// 현재 구역 기준으로 레인과 상하차 구역 사이 전환 요청을 토글합니다.
-        /// </summary>
-        public static bool TryToggleLoadingDock(
-            MetaProgressionCatalogAsset catalog,
-            int physicalLaneCount = int.MaxValue)
+        public static bool TryToggleLoadingDock(MetaProgressionCatalogAsset catalog, int physicalLaneCount = int.MaxValue)
         {
-            EnsureMetaProgressionInitialized(catalog, physicalLaneCount);
-            if (IsPauseMenuOpen)
-            {
-                return false;
-            }
-
-            if (_currentWorkArea == WorkAreaType.Lane)
-            {
-                return _workAreaTransitionPhase == WorkAreaTransitionPhase.None &&
-                       TryRequestLoadingDockEntry(catalog, physicalLaneCount);
-            }
-
-            return _workAreaTransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock &&
-                   TryRequestLoadingDockReturn();
+            return false;
         }
 
-        /// <summary>
-        /// 상하차 구역 진입/체류/복귀 중에는 레인 이동 입력과 보간 이동을 모두 잠급니다.
-        /// </summary>
         public static bool IsLaneMovementLocked()
         {
-            return _workAreaTransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
-                   _workAreaTransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock ||
-                   _workAreaTransitionPhase == WorkAreaTransitionPhase.ReturningToLane;
+            return _currentMiniGamePhase == BattleMiniGamePhase.Approval;
         }
 
-        /// <summary>
-        /// 전역 일시정지 팝업을 열고 시간을 멈춥니다.
-        /// </summary>
         public static void OpenPauseMenu()
         {
             ApplyPauseState(true);
         }
 
-        /// <summary>
-        /// 전역 일시정지 팝업을 닫고 시간을 다시 흐르게 합니다.
-        /// </summary>
         public static void ClosePauseMenu()
         {
             ApplyPauseState(false);
         }
 
-        /// <summary>
-        /// 전역 일시정지 팝업의 열림 상태를 반전합니다.
-        /// </summary>
         public static void TogglePauseMenu()
         {
             ApplyPauseState(!IsPauseMenuOpen);
+        }
+
+        private static int ResolvePlannedWeight(LoadingDockCargoKind kind, CargoConfig cargoConfig, System.Random random)
+        {
+            return kind switch
+            {
+                LoadingDockCargoKind.Fragile => random.Next(Mathf.Max(2, cargoConfig.FragileWeight - 2), cargoConfig.FragileWeight + 2),
+                LoadingDockCargoKind.Frozen => random.Next(Mathf.Max(4, cargoConfig.HeavyWeight - 4), cargoConfig.HeavyWeight + 1),
+                _ => random.Next(Mathf.Max(3, cargoConfig.StandardWeight - 2), cargoConfig.StandardWeight + 2)
+            };
+        }
+
+        private static void ClearRhythmQueues()
+        {
+            _pendingApprovalQueue.Clear();
+            _pendingRouteQueue.Clear();
+            _nextCargoEntryId = 1;
         }
 
         private static float CalculateWorkDuration(int healthLevel, float baseWorkDurationSeconds, float healthDurationBonusSeconds)
@@ -607,9 +678,6 @@ namespace ClikerSlash.Battle
             return baseWorkDurationSeconds + (normalizedHealthLevel - MinimumHealthLevel) * healthDurationBonusSeconds;
         }
 
-        /// <summary>
-        /// 현재 스냅샷을 기준으로 메타 집계 결과를 다시 계산합니다.
-        /// </summary>
         private static void RebuildResolvedMetaProgression(
             MetaProgressionCatalogAsset catalog,
             int physicalLaneCount = int.MaxValue)
@@ -634,9 +702,6 @@ namespace ClikerSlash.Battle
             Time.timeScale = isPaused ? 0f : 1f;
         }
 
-        /// <summary>
-        /// 엔진이 플레이어 도메인을 다시 로드할 때 정적 세션 상태를 초기화합니다.
-        /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStaticState()
         {
