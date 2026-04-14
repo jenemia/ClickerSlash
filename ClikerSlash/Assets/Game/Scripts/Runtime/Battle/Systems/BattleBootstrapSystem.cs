@@ -37,17 +37,23 @@ namespace ClikerSlash.Battle
             var laneEntity = SystemAPI.GetSingletonEntity<LaneLayout>();
             var laneXs = state.EntityManager.GetBuffer<LaneWorldXElement>(laneEntity);
             var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
-            var activeLaneCount = MetaProgressionBootstrapBridge.ResolveActiveLaneCount(resolvedProgression, laneXs.Length);
-            var activeLaneStartIndex = BattleLaneUtility.ResolveCenteredActiveLaneStartIndex(activeLaneCount, laneXs.Length);
-            var initialLane = BattleLaneUtility.ClampLaneToActiveRange(
-                playerConfig.InitialLane,
-                activeLaneStartIndex,
-                activeLaneCount,
-                laneXs.Length);
+            var activeLaneCount = math.min(PrototypeSessionRuntime.FixedRouteLaneCount, laneXs.Length);
+            var initialLane = BattleLaneUtility.ClampLane(playerConfig.InitialLane, activeLaneCount);
             var playerX = BattleLaneUtility.GetLaneX(laneXs, initialLane);
             var resolvedWorkDuration = PrototypeSessionRuntime.ResolveWorkDuration(
                 battleConfig.BaseWorkDurationSeconds,
                 battleConfig.HealthDurationBonusSeconds);
+            var spawnPlanSeed = (uint)System.DateTime.UtcNow.Ticks;
+            if (spawnPlanSeed == 0u)
+            {
+                spawnPlanSeed = 1u;
+            }
+
+            PrototypeSessionRuntime.InitializeRhythmCargoPlan(
+                resolvedWorkDuration,
+                battleConfig.SpawnInterval,
+                SystemAPI.GetSingleton<CargoConfig>(),
+                spawnPlanSeed);
 
             state.EntityManager.AddComponentData(configEntity, new StageProgressState
             {
@@ -58,7 +64,7 @@ namespace ClikerSlash.Battle
             state.EntityManager.AddComponentData(configEntity, new SpawnTimerState
             {
                 Remaining = battleConfig.SpawnInterval,
-                Random = Unity.Mathematics.Random.CreateFromIndex(0x00C0FFEEu)
+                Random = Unity.Mathematics.Random.CreateFromIndex(spawnPlanSeed)
             });
             state.EntityManager.AddComponentData(configEntity, new BattleOutcomeState
             {
@@ -73,7 +79,19 @@ namespace ClikerSlash.Battle
                 MaxCombo = 0,
                 WorkedTimeSeconds = 0f,
                 ResolvedWorkDurationSeconds = resolvedWorkDuration,
+                ApprovedCargoCount = 0,
+                RejectedCargoCount = 0,
+                CorrectRouteCount = 0,
+                MisrouteCount = 0,
+                ReturnCount = 0,
                 HasSnapshot = 0
+            });
+            state.EntityManager.AddComponentData(configEntity, new RhythmPhaseState
+            {
+                CurrentPhase = BattleMiniGamePhase.Approval,
+                PendingApprovalCount = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().PendingApprovalCount,
+                PendingRouteCount = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().PendingRouteCount,
+                HasActiveCargo = 0
             });
             state.EntityManager.AddComponentData(configEntity, new WorkerProgressionStats
             {
@@ -84,7 +102,6 @@ namespace ClikerSlash.Battle
             });
             state.EntityManager.AddComponentData(configEntity, new SessionRuleState
             {
-                ActiveLaneStartIndex = activeLaneStartIndex,
                 ActiveLaneCount = activeLaneCount,
                 PreviewCargoCount = resolvedProgression.PreviewCargoCount
             });
@@ -128,26 +145,10 @@ namespace ClikerSlash.Battle
             state.EntityManager.AddComponentData(playerEntity, new MaxHandleWeight { Value = resolvedProgression.MaxHandleWeight });
             state.EntityManager.AddComponentData(playerEntity, new ComboState { Current = 0, Max = 0 });
             state.EntityManager.AddComponentData(playerEntity, LocalTransform.FromPositionRotationScale(
-                new float3(playerX, playerConfig.WorldPosition.y, playerConfig.WorldPosition.z),
+                new float3(playerX, playerConfig.Y, playerConfig.Z),
                 quaternion.identity,
                 1f));
             state.EntityManager.AddBuffer<LaneMoveCommandBufferElement>(playerEntity);
-
-            if (resolvedProgression.HasLaneRobotAccess)
-            {
-                var laneRobotEntity = state.EntityManager.CreateEntity();
-                state.EntityManager.AddComponentData(laneRobotEntity, new LaneRobotTag());
-                state.EntityManager.AddComponentData(laneRobotEntity, new LaneRobotState
-                {
-                    AssignedLane = 0,
-                    IsAssigned = 0
-                });
-                state.EntityManager.AddComponentData(laneRobotEntity, new HandleState { BusyUntilTime = 0d });
-                state.EntityManager.AddComponentData(laneRobotEntity, LocalTransform.FromPositionRotationScale(
-                    new float3(0f, playerConfig.WorldPosition.y, (battleConfig.JudgmentLineZ + battleConfig.FailLineZ) * 0.5f),
-                    quaternion.identity,
-                    0.95f));
-            }
         }
     }
 }

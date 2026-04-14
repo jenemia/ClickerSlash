@@ -29,7 +29,8 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            if (stageProgress.ValueRO.RemainingWorkTime > 0f)
+            if (stageProgress.ValueRO.RemainingWorkTime > 0f &&
+                !PrototypeSessionRuntime.IsMiniGameLoopFinished())
             {
                 return;
             }

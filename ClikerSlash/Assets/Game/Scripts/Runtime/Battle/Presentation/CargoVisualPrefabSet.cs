@@ -10,20 +10,22 @@ namespace ClikerSlash.Battle
     {
         [SerializeField] private GameObject standardPrefab;
         [SerializeField] private GameObject fragilePrefab;
-        [SerializeField] private GameObject heavyPrefab;
+        [SerializeField] private GameObject frozenPrefab;
 
+        public GameObject GeneralPrefab => standardPrefab;
         public GameObject StandardPrefab => standardPrefab;
         public GameObject FragilePrefab => fragilePrefab;
-        public GameObject HeavyPrefab => heavyPrefab;
-        public bool IsComplete => standardPrefab != null && fragilePrefab != null && heavyPrefab != null;
+        public GameObject FrozenPrefab => frozenPrefab;
+        public GameObject HeavyPrefab => frozenPrefab;
+        public bool IsComplete => standardPrefab != null && fragilePrefab != null && frozenPrefab != null;
 
-        public static CargoVisualPrefabSet Create(GameObject standardPrefab, GameObject fragilePrefab, GameObject heavyPrefab)
+        public static CargoVisualPrefabSet Create(GameObject standardPrefab, GameObject fragilePrefab, GameObject frozenPrefab)
         {
             return new CargoVisualPrefabSet
             {
                 standardPrefab = standardPrefab,
                 fragilePrefab = fragilePrefab,
-                heavyPrefab = heavyPrefab
+                frozenPrefab = frozenPrefab
             };
         }
 
@@ -32,7 +34,7 @@ namespace ClikerSlash.Battle
             return kind switch
             {
                 LoadingDockCargoKind.Fragile => fragilePrefab,
-                LoadingDockCargoKind.Heavy => heavyPrefab,
+                LoadingDockCargoKind.Frozen => frozenPrefab,
                 _ => standardPrefab
             };
         }

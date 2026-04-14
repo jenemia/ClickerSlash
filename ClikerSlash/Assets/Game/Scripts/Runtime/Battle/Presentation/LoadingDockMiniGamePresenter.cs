@@ -311,8 +311,8 @@ namespace ClikerSlash.Battle
             return kind switch
             {
                 LoadingDockCargoKind.Fragile => "깨지기 쉬운 물류",
-                LoadingDockCargoKind.Heavy => "무거운 물류",
-                _ => "표준 물류"
+                LoadingDockCargoKind.Frozen => "냉동 물류",
+                _ => "일반 물류"
             };
         }
     }

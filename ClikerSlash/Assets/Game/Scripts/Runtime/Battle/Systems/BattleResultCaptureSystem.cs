@@ -47,7 +47,12 @@ namespace ClikerSlash.Battle
                 MissedCargoCount = sessionStats.ValueRO.MissedCargoCount,
                 CurrentCombo = sessionStats.ValueRO.CurrentCombo,
                 MaxCombo = sessionStats.ValueRO.MaxCombo,
-                WorkedTimeSeconds = stageProgress.ElapsedWorkTime
+                WorkedTimeSeconds = stageProgress.ElapsedWorkTime,
+                ApprovedCargoCount = sessionStats.ValueRO.ApprovedCargoCount,
+                RejectedCargoCount = sessionStats.ValueRO.RejectedCargoCount,
+                CorrectRouteCount = sessionStats.ValueRO.CorrectRouteCount,
+                MisrouteCount = sessionStats.ValueRO.MisrouteCount,
+                ReturnCount = sessionStats.ValueRO.ReturnCount
             });
         }
     }

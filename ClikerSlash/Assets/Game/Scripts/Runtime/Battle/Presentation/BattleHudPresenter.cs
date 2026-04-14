@@ -1,6 +1,4 @@
-using Unity.Collections;
 using Unity.Entities;
-using Unity.Transforms;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -8,7 +6,7 @@ using UnityEngine.UI;
 namespace ClikerSlash.Battle
 {
     /// <summary>
-    /// 매 프레임 ECS 상태를 읽어 물류 HUD와 결과 패널을 함께 갱신합니다.
+    /// 현재 2단계 리듬 물류 루프의 phase, 통계, 입력 가이드를 HUD로 표시합니다.
     /// </summary>
     public sealed class BattleHudPresenter : MonoBehaviour
     {
@@ -29,14 +27,6 @@ namespace ClikerSlash.Battle
             controlsText = controls;
         }
 
-        private void Awake()
-        {
-            if (controlsText != null)
-            {
-                controlsText.text = "Controls: A / D or Left / Right";
-            }
-        }
-
         private void Update()
         {
             var world = World.DefaultGameObjectInjectionWorld;
@@ -49,19 +39,9 @@ namespace ClikerSlash.Battle
             using var battleQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<StageProgressState>(),
                 ComponentType.ReadOnly<BattleOutcomeState>(),
-                ComponentType.ReadOnly<BattleSessionStatsState>());
-            using var playerQuery = entityManager.CreateEntityQuery(
-                ComponentType.ReadOnly<PlayerTag>(),
-                ComponentType.ReadOnly<LaneIndex>(),
-                ComponentType.ReadOnly<MaxHandleWeight>(),
-                ComponentType.ReadOnly<ComboState>());
-            using var laneQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<LaneLayout>());
-            using var sessionRuleQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<SessionRuleState>());
-            using var laneRobotQuery = entityManager.CreateEntityQuery(
-                ComponentType.ReadOnly<LaneRobotTag>(),
-                ComponentType.ReadOnly<LaneRobotState>());
-
-            if (battleQuery.IsEmptyIgnoreFilter || playerQuery.IsEmptyIgnoreFilter || laneQuery.IsEmptyIgnoreFilter)
+                ComponentType.ReadOnly<BattleSessionStatsState>(),
+                ComponentType.ReadOnly<RhythmPhaseState>());
+            if (battleQuery.IsEmptyIgnoreFilter)
             {
                 return;
             }
@@ -69,55 +49,17 @@ namespace ClikerSlash.Battle
             var stage = battleQuery.GetSingleton<StageProgressState>();
             var outcome = battleQuery.GetSingleton<BattleOutcomeState>();
             var stats = battleQuery.GetSingleton<BattleSessionStatsState>();
-            var playerEntity = playerQuery.GetSingletonEntity();
-            var lane = entityManager.GetComponentData<LaneIndex>(playerEntity);
-            var maxHandleWeight = entityManager.GetComponentData<MaxHandleWeight>(playerEntity);
-            var combo = entityManager.GetComponentData<ComboState>(playerEntity);
-            var laneLayout = laneQuery.GetSingleton<LaneLayout>();
-            var activeLaneStartIndex = sessionRuleQuery.IsEmptyIgnoreFilter
-                ? 0
-                : entityManager.GetComponentData<SessionRuleState>(sessionRuleQuery.GetSingletonEntity()).ActiveLaneStartIndex;
-            var activeLaneCount = sessionRuleQuery.IsEmptyIgnoreFilter
-                ? laneLayout.LaneCount
-                : entityManager.GetComponentData<SessionRuleState>(sessionRuleQuery.GetSingletonEntity()).ActiveLaneCount;
-            var hasLaneRobot = !laneRobotQuery.IsEmptyIgnoreFilter;
-            var laneRobotState = hasLaneRobot
-                ? entityManager.GetComponentData<LaneRobotState>(laneRobotQuery.GetSingletonEntity())
-                : default;
-            var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
-                MetaProgressionCatalogAsset.LoadDefaultCatalog(),
-                laneLayout.LaneCount);
+            var phaseState = battleQuery.GetSingleton<RhythmPhaseState>();
 
-            HandleGlobalOverlayInput(loadingDockState, outcome);
-            if (!PrototypeSessionRuntime.IsPauseMenuOpen)
-            {
-                HandleLoadingDockInput(loadingDockState, laneLayout.LaneCount, outcome);
-                HandleLaneRobotPlacementInput(
-                    entityManager,
-                    laneRobotQuery,
-                    laneRobotState,
-                    activeLaneStartIndex,
-                    activeLaneCount,
-                    laneLayout.LaneCount,
-                    loadingDockState,
-                    outcome);
-                if (hasLaneRobot)
-                {
-                    laneRobotState = entityManager.GetComponentData<LaneRobotState>(laneRobotQuery.GetSingletonEntity());
-                }
-            }
-            loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState(
-                MetaProgressionCatalogAsset.LoadDefaultCatalog(),
-                laneLayout.LaneCount);
-            var loadingDockQueue = PrototypeSessionRuntime.GetLoadingDockQueueSnapshot();
+            HandlePauseInput(outcome);
 
             infoText.text =
-                $"Work {stage.RemainingWorkTime:0.0}s\nMoney {stats.TotalMoney}\nCombo {combo.Current}\nDock {loadingDockQueue.ActiveSlotCount}/{loadingDockQueue.MaxActiveSlotCount} + {loadingDockQueue.BacklogCount}";
+                $"Work {stage.RemainingWorkTime:0.0}s\nIncome {stats.TotalMoney}\nApproved {stats.ApprovedCargoCount}\nRejected {stats.RejectedCargoCount}";
             laneText.text =
-                $"Lane {lane.Value + 1} / {laneLayout.LaneCount} (Open {DescribeLaneRange(activeLaneStartIndex, activeLaneCount)})\nMax Weight {maxHandleWeight.Value}\nRobot {(hasLaneRobot ? DescribeLaneRobotState(laneRobotState) : "OFF")}";
+                $"Phase {DescribePhase(phaseState.CurrentPhase)}\nPending Approval {phaseState.PendingApprovalCount}\nPending Route {phaseState.PendingRouteCount}\nCorrect {stats.CorrectRouteCount} / Misroute {stats.MisrouteCount} / Return {stats.ReturnCount}";
             if (controlsText != null)
             {
-                controlsText.text = BuildControlsText(loadingDockState, hasLaneRobot, laneRobotState, activeLaneStartIndex, activeLaneCount);
+                controlsText.text = BuildControlsText(phaseState.CurrentPhase);
             }
 
             if (outcome.HasOutcome == 0)
@@ -130,17 +72,9 @@ namespace ClikerSlash.Battle
             resultText.gameObject.SetActive(true);
         }
 
-        private static void HandleGlobalOverlayInput(
-            LoadingDockRuntimeState loadingDockState,
-            BattleOutcomeState outcome)
+        private static void HandlePauseInput(BattleOutcomeState outcome)
         {
             if (outcome.HasOutcome != 0)
-            {
-                return;
-            }
-
-            if (loadingDockState.TransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
-                loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ReturningToLane)
             {
                 return;
             }
@@ -154,129 +88,24 @@ namespace ClikerSlash.Battle
             PrototypeSessionRuntime.TogglePauseMenu();
         }
 
-        private static void HandleLoadingDockInput(
-            LoadingDockRuntimeState loadingDockState,
-            int physicalLaneCount,
-            BattleOutcomeState outcome)
+        private static string BuildControlsText(BattleMiniGamePhase phase)
         {
-            if (!loadingDockState.HasLoadingDockAccess ||
-                outcome.HasOutcome != 0 ||
-                PrototypeSessionRuntime.IsPauseMenuOpen)
+            return phase switch
             {
-                return;
-            }
-
-            var keyboard = Keyboard.current;
-            if (keyboard == null)
-            {
-                return;
-            }
-
-            var catalog = MetaProgressionCatalogAsset.LoadDefaultCatalog();
-            if (keyboard.qKey.wasPressedThisFrame)
-            {
-                PrototypeSessionRuntime.TryToggleLoadingDock(catalog, physicalLaneCount);
-            }
+                BattleMiniGamePhase.Approval => "Approval: Z = Reject / X = Approve / Esc = Pause",
+                BattleMiniGamePhase.RouteSelection => "Route: 1 Air / 2 Sea / 3 Rail / 4 Truck / 5 Return / Esc = Pause",
+                _ => "Esc = Pause"
+            };
         }
 
-        private static void HandleLaneRobotPlacementInput(
-            EntityManager entityManager,
-            EntityQuery laneRobotQuery,
-            LaneRobotState laneRobotState,
-            int activeLaneStartIndex,
-            int activeLaneCount,
-            int physicalLaneCount,
-            LoadingDockRuntimeState loadingDockState,
-            BattleOutcomeState outcome)
+        private static string DescribePhase(BattleMiniGamePhase phase)
         {
-            if (laneRobotQuery.IsEmptyIgnoreFilter ||
-                laneRobotState.IsAssigned != 0 ||
-                loadingDockState.CurrentArea != WorkAreaType.Lane ||
-                loadingDockState.TransitionPhase != WorkAreaTransitionPhase.None ||
-                outcome.HasOutcome != 0 ||
-                PrototypeSessionRuntime.IsPauseMenuOpen)
+            return phase switch
             {
-                return;
-            }
-
-            var keyboard = Keyboard.current;
-            if (keyboard == null)
-            {
-                return;
-            }
-
-            var requestedLane = ResolveRequestedLaneIndex(keyboard);
-            if (!BattleLaneUtility.IsLaneActive(requestedLane, activeLaneStartIndex, activeLaneCount) ||
-                requestedLane >= physicalLaneCount)
-            {
-                return;
-            }
-
-            var laneRobotEntity = laneRobotQuery.GetSingletonEntity();
-            laneRobotState.AssignedLane = requestedLane;
-            laneRobotState.IsAssigned = 1;
-            entityManager.SetComponentData(laneRobotEntity, laneRobotState);
-
-            using var laneQuery = entityManager.CreateEntityQuery(ComponentType.ReadOnly<LaneLayout>());
-            if (laneQuery.IsEmptyIgnoreFilter)
-            {
-                return;
-            }
-
-            var laneEntity = laneQuery.GetSingletonEntity();
-            var laneXs = entityManager.GetBuffer<LaneWorldXElement>(laneEntity);
-            var robotTransform = entityManager.GetComponentData<LocalTransform>(laneRobotEntity);
-            robotTransform.Position.x = BattleLaneUtility.GetLaneX(laneXs, requestedLane);
-            entityManager.SetComponentData(laneRobotEntity, robotTransform);
-        }
-
-        private static int ResolveRequestedLaneIndex(Keyboard keyboard)
-        {
-            if (keyboard.digit1Key.wasPressedThisFrame) return 0;
-            if (keyboard.digit2Key.wasPressedThisFrame) return 1;
-            if (keyboard.digit3Key.wasPressedThisFrame) return 2;
-            if (keyboard.digit4Key.wasPressedThisFrame) return 3;
-            if (keyboard.digit5Key.wasPressedThisFrame) return 4;
-            if (keyboard.digit6Key.wasPressedThisFrame) return 5;
-            return -1;
-        }
-
-        private static string BuildControlsText(
-            LoadingDockRuntimeState loadingDockState,
-            bool hasLaneRobot,
-            LaneRobotState laneRobotState,
-            int activeLaneStartIndex,
-            int activeLaneCount)
-        {
-            var movementControls = "Controls: A / D or Left / Right";
-            var robotControls = hasLaneRobot && laneRobotState.IsAssigned == 0
-                ? $" / {DescribeLaneRange(activeLaneStartIndex, activeLaneCount)}: Place Robot"
-                : string.Empty;
-            if (!loadingDockState.HasLoadingDockAccess)
-            {
-                return $"{movementControls}{robotControls} / Esc: Pause";
-            }
-
-            return loadingDockState.CurrentArea == WorkAreaType.LoadingDock
-                ? $"{movementControls} / Q: Return To Lane / Esc: Pause"
-                : $"{movementControls}{robotControls} / Q: Loading Dock / Esc: Pause";
-        }
-
-        private static string DescribeLaneRobotState(LaneRobotState laneRobotState)
-        {
-            return laneRobotState.IsAssigned == 0
-                ? "UNSET"
-                : $"Lane {laneRobotState.AssignedLane + 1}";
-        }
-
-        private static string DescribeLaneRange(int activeLaneStartIndex, int activeLaneCount)
-        {
-            if (activeLaneCount <= 1)
-            {
-                return $"{activeLaneStartIndex + 1}";
-            }
-
-            return $"{activeLaneStartIndex + 1}-{activeLaneStartIndex + activeLaneCount}";
+                BattleMiniGamePhase.Approval => "Approval",
+                BattleMiniGamePhase.RouteSelection => "Route Selection",
+                _ => "Completed"
+            };
         }
 
         private void OnGUI()
@@ -287,8 +116,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            var entityManager = world.EntityManager;
-            using var battleQuery = entityManager.CreateEntityQuery(
+            using var battleQuery = world.EntityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<BattleOutcomeState>(),
                 ComponentType.ReadOnly<BattleSessionStatsState>());
             if (battleQuery.IsEmptyIgnoreFilter)
@@ -312,18 +140,17 @@ namespace ClikerSlash.Battle
             EnsureStyles();
 
             var panelWidth = Mathf.Clamp(Screen.width * 0.28f, 420f, 520f);
-            var panelHeight = Mathf.Clamp(Screen.height * 0.36f, 300f, 360f);
-            var panelRect = new Rect(
-                20f,
-                Screen.height - panelHeight - 20f,
-                panelWidth,
-                panelHeight);
+            var panelHeight = Mathf.Clamp(Screen.height * 0.40f, 320f, 420f);
+            var panelRect = new Rect(20f, Screen.height - panelHeight - 20f, panelWidth, panelHeight);
 
             GUILayout.BeginArea(panelRect, GUI.skin.box);
-            GUILayout.Label($"Money: {stats.TotalMoney}", _labelStyle);
-            GUILayout.Label($"Processed: {stats.ProcessedCargoCount}", _labelStyle);
-            GUILayout.Label($"Missed: {stats.MissedCargoCount}", _labelStyle);
-            GUILayout.Label($"Max Combo: {stats.MaxCombo}", _labelStyle);
+            GUILayout.Label($"Income: {stats.TotalMoney}", _labelStyle);
+            GUILayout.Label($"Approved: {stats.ApprovedCargoCount}", _labelStyle);
+            GUILayout.Label($"Rejected: {stats.RejectedCargoCount}", _labelStyle);
+            GUILayout.Label($"Correct Routes: {stats.CorrectRouteCount}", _labelStyle);
+            GUILayout.Label($"Misroutes: {stats.MisrouteCount}", _labelStyle);
+            GUILayout.Label($"Returns: {stats.ReturnCount}", _labelStyle);
+            GUILayout.Label($"Misses: {stats.MissedCargoCount}", _labelStyle);
             GUILayout.Label($"Worked: {stats.WorkedTimeSeconds:0.0}s", _labelStyle);
 
             GUILayout.FlexibleSpace();
@@ -340,27 +167,28 @@ namespace ClikerSlash.Battle
         {
             EnsureStyles();
 
-            var popupWidth = Mathf.Clamp(Screen.width * 0.28f, 320f, 460f);
-            var popupHeight = 220f;
+            var popupWidth = Mathf.Min(Screen.width * 0.32f, 520f);
+            var popupHeight = Mathf.Min(Screen.height * 0.24f, 260f);
             var popupRect = new Rect(
                 (Screen.width - popupWidth) * 0.5f,
                 (Screen.height - popupHeight) * 0.5f,
                 popupWidth,
                 popupHeight);
 
-            GUI.Box(new Rect(0f, 0f, Screen.width, Screen.height), string.Empty);
             GUILayout.BeginArea(popupRect, GUI.skin.window);
             GUILayout.Space(8f);
-            GUILayout.Label("일시정지", _popupTitleStyle);
-            GUILayout.Space(18f);
+            GUILayout.Label("PAUSED", _popupTitleStyle);
+            GUILayout.Space(8f);
+            GUILayout.Label("Resume the shift or return to the hub.", _labelStyle);
+            GUILayout.FlexibleSpace();
 
-            if (GUILayout.Button("재개하기", _buttonStyle, GUILayout.Height(44f)))
+            if (GUILayout.Button("Resume", _buttonStyle, GUILayout.Height(40f)))
             {
                 PrototypeSessionRuntime.ClosePauseMenu();
             }
 
-            GUILayout.Space(10f);
-            if (GUILayout.Button("허브로가기", _buttonStyle, GUILayout.Height(44f)))
+            GUILayout.Space(8f);
+            if (GUILayout.Button("Return To Hub", _buttonStyle, GUILayout.Height(40f)))
             {
                 PrototypeSessionRuntime.ClosePauseMenu();
                 PrototypeSceneNavigator.LoadHubScene();
@@ -379,21 +207,15 @@ namespace ClikerSlash.Battle
             _labelStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 22,
-                normal = { textColor = Color.white }
+                wordWrap = true
             };
-
             _buttonStyle = new GUIStyle(GUI.skin.button)
             {
-                fontSize = 22,
-                fontStyle = FontStyle.Bold
+                fontSize = 22
             };
-
-            _buttonStyle.margin = new RectOffset(0, 0, 0, 0);
-
-            _popupTitleStyle = new GUIStyle(_labelStyle)
+            _popupTitleStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 30,
-                fontStyle = FontStyle.Bold,
+                fontSize = 32,
                 alignment = TextAnchor.MiddleCenter
             };
         }

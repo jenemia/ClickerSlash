@@ -7,14 +7,13 @@ using UnityEngine;
 
 namespace ClikerSlash.Battle
 {
-    /// <summary>
-    /// ECS의 플레이어와 물류 위치를 프로토타입 씬의 단순 게임 오브젝트 뷰에 반영합니다.
-    /// 상하차 진입 연출은 Cinemachine 가상 카메라 우선순위 전환으로 처리합니다.
-    /// </summary>
+        /// <summary>
+        /// ECS의 현재 활성 물류를 프로토타입 씬의 단순 게임 오브젝트 뷰에 반영합니다.
+        /// 승인 phase는 보조 카메라, 레인선택 phase는 메인 레인 카메라를 사용합니다.
+        /// </summary>
     public sealed class BattlePresentationBridge : MonoBehaviour
     {
         [SerializeField] private GameObject playerViewPrefab;
-        [SerializeField] private GameObject supportRobotViewPrefab;
         [SerializeField] private CargoVisualPrefabSet cargoVisualPrefabs;
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private BattleViewAuthoring battleView;
@@ -24,10 +23,6 @@ namespace ClikerSlash.Battle
         [SerializeField] [Min(0.05f)] private float loadingDockTransitionDuration = PrototypeSessionRuntime.DefaultLoadingDockTransitionDurationSeconds;
         [SerializeField] [Min(0)] private int standbyCameraPriority = 10;
         [SerializeField] [Min(1)] private int liveCameraPriority = 20;
-        [SerializeField] private Vector3 laneCargoGlobalOffset;
-        [SerializeField] private Vector3 laneStandardCargoOffset;
-        [SerializeField] private Vector3 laneFragileCargoOffset;
-        [SerializeField] private Vector3 laneHeavyCargoOffset;
 
         private World _cachedWorld;
         private EntityQuery _playerQuery;
@@ -85,15 +80,9 @@ namespace ClikerSlash.Battle
         /// <summary>
         /// 레인과 상하차가 공유하는 물류 프리팹 세트를 명시적으로 연결합니다.
         /// </summary>
-        public void BindVisualPrefabs(
-            GameObject targetPlayerViewPrefab,
-            CargoVisualPrefabSet targetCargoVisualPrefabs,
-            GameObject targetSupportRobotViewPrefab = null)
+        public void BindVisualPrefabs(GameObject targetPlayerViewPrefab, CargoVisualPrefabSet targetCargoVisualPrefabs)
         {
             playerViewPrefab = targetPlayerViewPrefab;
-            supportRobotViewPrefab = targetSupportRobotViewPrefab != null
-                ? targetSupportRobotViewPrefab
-                : targetPlayerViewPrefab;
             cargoVisualPrefabs = targetCargoVisualPrefabs;
         }
 
@@ -115,7 +104,6 @@ namespace ClikerSlash.Battle
             _cachedWorld = world;
             _playerQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<PlayerTag>(),
-                ComponentType.ReadOnly<LaneMoveState>(),
                 ComponentType.ReadOnly<LocalTransform>());
             _cargoQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<CargoTag>(),
@@ -135,27 +123,19 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            using var moveStates = _playerQuery.ToComponentDataArray<LaneMoveState>(Allocator.Temp);
             using var transforms = _playerQuery.ToComponentDataArray<LocalTransform>(Allocator.Temp);
             if (_playerInstance == null)
             {
                 _playerInstance = Instantiate(playerViewPrefab, transform);
                 _playerInstance.name = "WorkerView";
-                ConfigurePlayerViewInstance(_playerInstance);
             }
 
             _playerInstance.transform.position = transforms[0].Position;
-            var direction = moveStates[0].TargetLane - moveStates[0].StartLane;
-            if (_playerInstance.TryGetComponent<BattleRobotKyleAnimatorDriver>(out var driver))
-            {
-                driver.ApplyPresentationState(moveStates[0].IsMoving != 0, Mathf.Sign(direction));
-            }
         }
 
         private void SyncLaneRobot(EntityManager entityManager)
         {
-            var supportViewPrefab = GetSupportRobotViewPrefab();
-            if (supportViewPrefab == null || _laneRobotQuery.IsEmptyIgnoreFilter)
+            if (playerViewPrefab == null || _laneRobotQuery.IsEmptyIgnoreFilter)
             {
                 if (_laneRobotInstance != null)
                 {
@@ -195,8 +175,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            var dockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
-            var shouldUseDockCamera = ShouldUseLoadingDockCamera(dockState);
+            var shouldUseDockCamera = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase == BattleMiniGamePhase.Approval;
 
             if (_dockCameraIsLive == shouldUseDockCamera)
             {
@@ -246,8 +225,7 @@ namespace ClikerSlash.Battle
         /// </summary>
         internal static bool ShouldUseLoadingDockCamera(LoadingDockRuntimeState dockState)
         {
-            return dockState.TransitionPhase == WorkAreaTransitionPhase.EnteringLoadingDock ||
-                   dockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+            return dockState.CurrentArea == WorkAreaType.LoadingDock;
         }
 
         /// <summary>
@@ -265,19 +243,6 @@ namespace ClikerSlash.Battle
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// 레인 물류 뷰의 높이와 피벗 차이를 맞추기 위한 종류별 시각 보정값을 반환합니다.
-        /// </summary>
-        public Vector3 GetLaneCargoOffset(LoadingDockCargoKind kind)
-        {
-            return laneCargoGlobalOffset + (kind switch
-            {
-                LoadingDockCargoKind.Fragile => laneFragileCargoOffset,
-                LoadingDockCargoKind.Heavy => laneHeavyCargoOffset,
-                _ => laneStandardCargoOffset
-            });
         }
 
         private void SyncCargo(EntityManager entityManager)
@@ -309,9 +274,7 @@ namespace ClikerSlash.Battle
                     _cargoInstances[cargoEntity] = cargoView;
                 }
 
-                var visualPosition = (Vector3)transforms[i].Position;
-                visualPosition.y = 0f;
-                cargoView.transform.position = visualPosition + GetLaneCargoOffset(kinds[i].Value);
+                cargoView.transform.position = transforms[i].Position;
             }
 
             if (_cargoInstances.Count == 0)
@@ -344,7 +307,7 @@ namespace ClikerSlash.Battle
 
         private void SyncDockRobot()
         {
-            if (GetSupportRobotViewPrefab() == null || loadingDockEnvironment == null)
+            if (playerViewPrefab == null || loadingDockEnvironment == null)
             {
                 if (_dockRobotInstance != null)
                 {
@@ -354,12 +317,7 @@ namespace ClikerSlash.Battle
                 return;
             }
 
-            var resolvedProgression = PrototypeSessionRuntime.GetResolvedMetaProgression();
-            var loadingDockState = PrototypeSessionRuntime.GetLoadingDockRuntimeState();
-            var shouldShow = resolvedProgression.HasDockRobotAccess &&
-                             PrototypeSessionRuntime.HasInstalledDockRobot() &&
-                             loadingDockState.CurrentArea == WorkAreaType.LoadingDock &&
-                             loadingDockState.TransitionPhase == WorkAreaTransitionPhase.ActiveInLoadingDock;
+            var shouldShow = PrototypeSessionRuntime.GetBattleMiniGamePhaseSnapshot().CurrentPhase == BattleMiniGamePhase.Approval;
 
             if (_dockRobotInstance == null)
             {
@@ -383,13 +341,7 @@ namespace ClikerSlash.Battle
 
         private GameObject CreateRobotInstance(string name, Color color, float scale)
         {
-            var supportViewPrefab = GetSupportRobotViewPrefab();
-            if (supportViewPrefab == null)
-            {
-                return null;
-            }
-
-            var robotInstance = Instantiate(supportViewPrefab, transform);
+            var robotInstance = Instantiate(playerViewPrefab, transform);
             robotInstance.name = name;
             robotInstance.transform.localScale = Vector3.one * scale;
 
@@ -399,80 +351,6 @@ namespace ClikerSlash.Battle
             }
 
             return robotInstance;
-        }
-
-        private GameObject GetSupportRobotViewPrefab()
-        {
-            return supportRobotViewPrefab != null ? supportRobotViewPrefab : playerViewPrefab;
-        }
-
-        private static void ConfigurePlayerViewInstance(GameObject playerView)
-        {
-            DisableComponentsByTypeName(
-                playerView,
-                "CharacterController");
-            DestroyComponentsByTypeName(
-                playerView,
-                "ThirdPersonController",
-                "BasicRigidBodyPush",
-                "PlayerInput",
-                "StarterAssetsInputs");
-
-            if (!playerView.TryGetComponent<BattleRobotKyleAnimatorDriver>(out _))
-            {
-                playerView.AddComponent<BattleRobotKyleAnimatorDriver>();
-            }
-        }
-
-        private static void DisableComponentsByTypeName(GameObject root, params string[] typeNames)
-        {
-            foreach (var component in root.GetComponentsInChildren<Component>(true))
-            {
-                if (component == null)
-                {
-                    continue;
-                }
-
-                var componentTypeName = component.GetType().Name;
-                for (var index = 0; index < typeNames.Length; index += 1)
-                {
-                    if (!string.Equals(componentTypeName, typeNames[index], System.StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    var enabledProperty = component.GetType().GetProperty("enabled");
-                    if (enabledProperty != null && enabledProperty.CanWrite)
-                    {
-                        enabledProperty.SetValue(component, false);
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        private static void DestroyComponentsByTypeName(GameObject root, params string[] typeNames)
-        {
-            foreach (var component in root.GetComponentsInChildren<Component>(true))
-            {
-                if (component == null)
-                {
-                    continue;
-                }
-
-                var componentTypeName = component.GetType().Name;
-                for (var index = 0; index < typeNames.Length; index += 1)
-                {
-                    if (!string.Equals(componentTypeName, typeNames[index], System.StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    Destroy(component);
-                    break;
-                }
-            }
         }
 
         private void CleanupAllViews()
